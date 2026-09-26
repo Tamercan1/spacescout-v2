@@ -1,5 +1,5 @@
 from django.db import transaction
-from ..models import SpacePlan, Discoveries
+from ..models import SpacePlan, Discovery, DiscoveryMedia
 from datetime import date
 
 # =================================
@@ -24,7 +24,7 @@ def save_space_plan(user, prompt, space_plan):
             media_type = None
             media_url = None
 
-        Discoveries.objects.create(
+        new_discovery = Discovery.objects.create(
             space_plan=plan,
             type=discovery.type,
             title=discovery.title,
@@ -33,8 +33,14 @@ def save_space_plan(user, prompt, space_plan):
             why_interesting=discovery.why_interesting,
             facts=discovery.facts,
             source=discovery.source,
-            media_type=media_type,
-            media_url=media_url
         )
+
+        if media_url:
+            DiscoveryMedia.objects.create(
+                discovery=new_discovery,
+                media_type=media_type or "other",
+                url=media_url,
+                is_primary=True,
+            )
 
     return plan

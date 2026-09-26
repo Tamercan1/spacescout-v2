@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from .models import User, SpacePlan, Discoveries
+from .models import User, SpacePlan, Discovery
 from .app_services.space_plan import save_space_plan
 from .engine.space_planner import run_space_planner
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, SpacePlan, Discoveries
+from .models import User, SpacePlan, Discovery
 
 # register your models here
 admin.site.register(User, UserAdmin)
@@ -14,8 +14,8 @@ class SpacePlanAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
 
 
-@admin.register(Discoveries)
-class DiscoveriesAdmin(admin.ModelAdmin):
-    list_display = ("title", "space_plan", "type", "date", "media_type")
-    list_filter = ("type", "media_type", "date")
+@admin.register(Discovery)
+class DiscoveryAdmin(admin.ModelAdmin):
+    list_display = ("title", "space_plan", "type", "date")
+    list_filter = ("type", "date")
     search_fields = ("title", "summary", "why_interesting")

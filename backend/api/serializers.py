@@ -1,4 +1,4 @@
-from .models import User, SpacePlan, Discoveries
+from .models import User, SpacePlan, Discovery
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -35,19 +35,19 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 # Used inside Space Planner Serializer to serialize every discovery
-class DiscoveriesSerializer(serializers.ModelSerializer):
+class DiscoverySerializer(serializers.ModelSerializer):
     class Meta:
-        model = Discoveries
+        model = Discovery
         fields = [
             "id", "type", "title",
             "date", "summary", "why_interesting",
-            "facts", "source", "media_type", "media_url"
+            "facts", "source"
         ] 
           
 
 # Main DB Serializer
 class SpacePlanSerializer(serializers.ModelSerializer):
-    discoveries = DiscoveriesSerializer(many=True, read_only=True)
+    discoveries = DiscoverySerializer(many=True, read_only=True)
 
     class Meta:
         model = SpacePlan
