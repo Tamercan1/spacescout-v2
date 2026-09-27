@@ -2,10 +2,8 @@ import HistorySideBar from "../components/HistorySidebar";
 import PlannerLoading from "../components/PlannerLoading";
 import React from "react";
 import { useState, useRef } from "react";
-import { useOutletContext } from "react-router-dom";
 import { createSpacePlan } from "../api/planner";
 import type { SpacePlan, Discovery } from "../types/planner";
-import type { LayoutContext } from "../components/ProtectedRoutes";
 import "../styles/Planner.css"
 import RenderSpacePlan from "../components/spaceplanpage/RenderSpacePlan";
 
@@ -17,7 +15,7 @@ function Planner() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    const { isHistoryOpen, setIsHistoryOpen } = useOutletContext<LayoutContext>()
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
     const bottomRef = useRef<HTMLDivElement>(null);
 

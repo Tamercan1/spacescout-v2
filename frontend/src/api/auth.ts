@@ -26,5 +26,5 @@ export async function register(username: string, password: string) {
         username, password
     })
 
-    response.data;
+    return response.data;
 }

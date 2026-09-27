@@ -28,6 +28,7 @@ function HistorySideBar({ setPlan, spacePlan, isOpen, setIsOpen }: HistoryProps)
                 const plans = await getSpacePlans();
                 setSpacePlans(plans);
             }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             catch (error) {
                 setError("Failed to load history");
             }
@@ -41,6 +42,7 @@ function HistorySideBar({ setPlan, spacePlan, isOpen, setIsOpen }: HistoryProps)
 
     useEffect(() => {
         if (spacePlan) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setSpacePlans((prevPlans) => {
                 if (prevPlans.some(p => p.id === spacePlan.id)) return prevPlans;
                 return [...prevPlans, spacePlan];

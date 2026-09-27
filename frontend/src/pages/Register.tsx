@@ -37,6 +37,7 @@ function Register() {
                 setError("Password must match");
             }
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         catch (error: any) {
 
             if (error.response && error.response.status === 400) {

@@ -1,61 +1,78 @@
-import { useContext, createContext, useState, type ReactNode } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import { useContext, createContext, useState, useEffect, type ReactNode } from "react";
 import { login } from "../api/auth";
-
+import { getCurrentUser, type User } from "../api/user";
 
 interface AuthContextType {
     isAuthenticated: boolean;
+    user: User | null;
+    isLoading: boolean;
     loginUser: (username: string, password: string) => Promise<void>;
     logoutUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// THE AUTH PROVIDER FOR ISAUT  HENTICATED AND TWO FUNCTIONS: LOGIN AND LOGOUT
 export function AuthProvider({ children }: {children: ReactNode}) {
-
-    // isAuthenticated context
-    const [isAuthenticated, setIsAuthenticated] = useState(
-        Boolean(localStorage.getItem("access_token")) // true if access_token is provided
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+        Boolean(localStorage.getItem("access_token"))
     );
+    const [user, setUser] = useState<User | null>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
 
-    // login function context
+    useEffect(() => {
+        const fetchUser = async () => {
+            if (isAuthenticated) {
+                try {
+                    const userData = await getCurrentUser();
+                    setUser(userData);
+                } catch (error) {
+                    console.error("Failed to fetch user profile", error);
+                    setIsAuthenticated(false);
+                    localStorage.removeItem("access_token");
+                    localStorage.removeItem("refresh_token");
+                }
+            }
+            setIsLoading(false);
+        };
+
+        fetchUser();
+    }, [isAuthenticated]);
+
     const loginUser = async (username: string, password: string) => {
         const tokens = await login(username, password);
 
         if (tokens) {
             localStorage.setItem("access_token", tokens.access);
             localStorage.setItem("refresh_token", tokens.refresh);
-            localStorage.setItem("username", username)
             setIsAuthenticated(true);
-        }
-        else {
+        } else {
             setIsAuthenticated(false);
         }
-    }
+    };
 
-    // logout function context
     const logoutUser = () => {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
-        localStorage.removeItem("username")
         setIsAuthenticated(false);
-    }
+        setUser(null);
+    };
 
     const provided_contexts: AuthContextType = {
         isAuthenticated,
+        user,
+        isLoading,
         loginUser,
         logoutUser
-    }
+    };
 
     return (
         <AuthContext.Provider value={provided_contexts}>
             {children}
         </AuthContext.Provider>
-    )
-    
+    );
 }
 
-// FOR USING THE AUTHENTICATION CONTEXTS
 export function useAuth() {
     const context = useContext(AuthContext);
 
