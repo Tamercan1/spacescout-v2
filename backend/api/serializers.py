@@ -1,4 +1,4 @@
-from .models import User, SpacePlan, Discovery
+from .models import User, UserProfile, SpacePlan, Discovery, DiscoveryMedia
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -34,16 +34,44 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
-# Used inside Space Planner Serializer to serialize every discovery
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ["preferred_model", "theme", "onboarding_completed_at"]
+        read_only_fields = ["onboarding_completed_at"]
+
+
+class CurrentUserSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "profile"]
+        read_only_fields = ["id", "username"]
+
+
+class DiscoveryMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DiscoveryMedia
+        fields = [
+            "id", "media_type", "url", "thumbnail_url",
+            "caption", "is_primary", "order"
+        ]
+
+
 class DiscoverySerializer(serializers.ModelSerializer):
+    media = DiscoveryMediaSerializer(many=True, read_only=True)
+
     class Meta:
         model = Discovery
         fields = [
-            "id", "type", "title",
-            "date", "summary", "why_interesting",
-            "facts", "source"
-        ] 
-          
+            "id", "source", "external_id", "source_url",
+            "type", "title", "date",
+            "summary", "why_interesting",
+            "facts", "tags", "details", "sort_order",
+            "media",
+            "first_discovered_at", "updated_at",
+        ]
 
 # Main DB Serializer
 class SpacePlanSerializer(serializers.ModelSerializer):
@@ -51,7 +79,10 @@ class SpacePlanSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SpacePlan
-        fields = ["id", "prompt", "title", "summary", "discoveries", "created_at", "updated_at"]
+        fields = [
+            "id", "prompt", "title", "summary", "status", "is_archived",
+            "discoveries", "created_at", "updated_at",
+        ]
 
 
 # User prompt serializer

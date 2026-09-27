@@ -162,7 +162,7 @@ class DiscoveryMedia(models.Model):
         return f"{self.discovery.title} - {self.media_type}"
     
 
-class Interactions(models.Model):
+class Interaction(models.Model):
     INTERACTION_TYPE_CHOICES = [
         ("find_more", "Find More"),
         ("enrich", "Tell Me More"),
@@ -199,4 +199,3 @@ class Interactions(models.Model):
 
     def __str__(self):
         return f"{self.space_plan.title} - {self.interaction_type}"
-    
