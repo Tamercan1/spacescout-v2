@@ -7,8 +7,6 @@ interface AppSidebarProps {
 }
 
 export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
-    const width = 260;
-
     return (
         <>
             <div className={`sidebar-overlay ${isOpen ? 'visible' : ''}`} onClick={closeSidebar}></div>
