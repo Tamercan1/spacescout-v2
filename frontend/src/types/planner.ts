@@ -17,6 +17,8 @@ export interface SpacePlan {
     prompt: string;
     title: string;
     summary: string;
+    status: string;
+    is_archived: boolean;
     discoveries: Discovery[];
     created_at: string;
     updated_at: string;

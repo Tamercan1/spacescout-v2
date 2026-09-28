@@ -35,7 +35,7 @@ class SpacePlanListView(generics.ListAPIView):
         return SpacePlan.objects.filter(user=user).order_by('-created_at')
 
 
-class SpacePlanDetailDestroyView(generics.RetrieveDestroyAPIView):
+class SpacePlanDetailDestroyView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SpacePlanSerializer
     permission_classes = [IsAuthenticated]
 

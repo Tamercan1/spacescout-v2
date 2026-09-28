@@ -34,3 +34,8 @@ export async function getSpacePlan(pk: number): Promise<SpacePlan> {
 export async function deleteSpacePlan(pk: number): Promise<void>{
     await api.delete(`/plans/${pk}/`);
 }
+
+export async function updateSpacePlan(pk: number, data: Partial<SpacePlan>): Promise<SpacePlan> {
+    const response = await api.patch<SpacePlan>(`/plans/${pk}/`, data);
+    return response.data;
+}

@@ -109,3 +109,45 @@ class SpacePlanTests(TestCase):
         self.assertIn("is_archived", response.data)
         self.assertIn("source_url", discoveries[0])
         self.assertIn("media", discoveries[0])
+
+    def test_plan_update_title_and_archive(self):
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('space_plan_detail_view', args=[self.plan1.id])
+        
+        # Test archive
+        response = self.client.patch(url, {"is_archived": True})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.plan1.refresh_from_db()
+        self.assertTrue(self.plan1.is_archived)
+
+        # Test title update
+        response = self.client.patch(url, {"title": "Updated Title"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.plan1.refresh_from_db()
+        self.assertEqual(self.plan1.title, "Updated Title")
+
+    def test_plan_update_cannot_modify_server_fields(self):
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('space_plan_detail_view', args=[self.plan1.id])
+        
+        # Attempt to modify read-only fields
+        response = self.client.patch(url, {
+            "prompt": "new prompt",
+            "status": "failed",
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.plan1.refresh_from_db()
+        
+        # Values should remain unchanged
+        self.assertEqual(self.plan1.prompt, "test")
+        self.assertEqual(self.plan1.status, "completed")
+
+    def test_cannot_update_other_users_plan(self):
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('space_plan_detail_view', args=[self.plan2.id])
+        
+        response = self.client.patch(url, {"title": "Stolen Plan"})
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        
+        self.plan2.refresh_from_db()
+        self.assertNotEqual(self.plan2.title, "Stolen Plan")

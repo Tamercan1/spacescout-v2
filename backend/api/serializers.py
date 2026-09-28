@@ -83,6 +83,7 @@ class SpacePlanSerializer(serializers.ModelSerializer):
             "id", "prompt", "title", "summary", "status", "is_archived",
             "discoveries", "created_at", "updated_at",
         ]
+        read_only_fields = ["id", "prompt", "summary", "status", "created_at", "updated_at"]
 
 
 # User prompt serializer

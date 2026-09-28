@@ -100,7 +100,8 @@ ol {
   list-style: none;
 }
 
-input, textarea {
+input,
+textarea {
   font-family: inherit;
 }
 
@@ -119,9 +120,9 @@ input, textarea {
   .app-shell {
     grid-template-columns: 1fr;
     grid-template-rows: var(--nav-h) 1fr auto;
-    grid-template-areas: 
-      "nav" 
-      "main" 
+    grid-template-areas:
+      "nav"
+      "main"
       "bottom-bar";
   }
 }
@@ -262,7 +263,7 @@ input, textarea {
   font-size: 0.95rem;
   letter-spacing: -0.02em;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--text-1);
   cursor: pointer;
 }
 
@@ -312,7 +313,8 @@ input, textarea {
   cursor: pointer;
 }
 
-.nav__link:hover, .nav__link.active {
+.nav__link:hover,
+.nav__link.active {
   color: var(--text-1);
   background: var(--surface-2);
 }
@@ -448,6 +450,7 @@ input, textarea {
   overflow: hidden;
   transition: width 0.22s ease;
 }
+
 .sidebar-wrap.open {
   width: var(--sidebar-w);
 }
@@ -604,7 +607,7 @@ input, textarea {
   .hide-on-mobile {
     display: none !important;
   }
-  
+
   .sidebar-wrap {
     position: fixed;
     top: 0;
@@ -614,12 +617,12 @@ input, textarea {
     pointer-events: none;
     z-index: 300;
   }
-  
+
   .sidebar-wrap.open {
     pointer-events: auto;
     width: 100%;
   }
-  
+
   .sidebar {
     position: absolute;
     height: 100vh;
@@ -627,11 +630,11 @@ input, textarea {
     transform: translateX(-100%);
     z-index: 301;
   }
-  
+
   .sidebar-wrap.open .sidebar {
     transform: translateX(0);
   }
-  
+
   .sidebar-wrap.open .sidebar-overlay {
     display: block;
     opacity: 1;
@@ -804,9 +807,11 @@ input, textarea {
   .settings-nav {
     display: none;
   }
+
   .settings-tabs-mobile {
     display: flex;
   }
+
   .settings-content {
     padding: 18px 20px;
   }
@@ -1017,6 +1022,7 @@ input, textarea {
   font-size: 0.72rem;
   color: var(--text-3);
 }
+
 /* ============================================================
    EXPLORATIONS PAGE
 ============================================================ */
@@ -1122,4 +1128,18 @@ input, textarea {
 
 .exp-row:hover .exp-row__actions {
   opacity: 1;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
 }
