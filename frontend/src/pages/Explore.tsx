@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Compass, Layers, MessageSquare, Loader2 } from 'lucide-react';
-import { getSpacePlan, getInteractions } from '../api/planner';
-import type { SpacePlan, Interaction, Discovery } from '../types/planner';
+import { getSpacePlan, getInteractions, createInteraction } from '../api/planner';
+import type { SpacePlan, Interaction, Discovery, InteractionType } from '../types/planner';
 import InteractionStream from '../components/explore/InteractionStream';
 
 export default function Explore() {
@@ -12,29 +12,30 @@ export default function Explore() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [continueExpanded, setContinueExpanded] = useState(false);
-
-    const loadData = async () => {
-        if (!id) return;
-
-        try {
-            setIsLoading(true);
-            const planId = parseInt(id, 10);
-            const [planData, interactionData] = await Promise.all([
-                getSpacePlan(planId),
-                getInteractions(planId),
-            ]);
-            setPlan(planData);
-            setInteractions(interactionData);
-        } catch (err) {
-            console.error("Failed to load exploration", err);
-            setError("Failed to load exploration.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const [prompt, setPrompt] = useState("");
+    const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        const loadData = async () => {
+            if (!id) return;
+            try {
+                setIsLoading(true);
+                const planId = parseInt(id, 10);
+                const [planData, interactionData] = await Promise.all([
+                    getSpacePlan(planId),
+                    getInteractions(planId),
+                ]);
+                setPlan(planData);
+                setInteractions(interactionData);
+            } catch (err) {
+                console.error("Failed to load exploration", err);
+                setError("Failed to load exploration.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
         loadData();
     }, [id]);
 
@@ -52,12 +53,42 @@ export default function Explore() {
     if (error || !plan) {
         return (
             <div className="explore-layout">
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', fontSize: '0.9rem' }}>
-                    {error || "Exploration not found."}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', color: 'var(--text-3)', fontSize: '0.9rem' }}>
+                    <div>{error || "Exploration not found."}</div>
+                    <button className="btn btn-ghost" onClick={() => navigate('/explorations')}>
+                        Back to Explorations
+                    </button>
                 </div>
             </div>
         );
     }
+
+    const handleCreateInteraction = async (type: InteractionType, text?: string) => {
+        if (!plan) return;
+        const submitPrompt = text || prompt;
+        if (!submitPrompt.trim()) return;
+
+        setIsCreatingInteraction(true);
+        try {
+            const newInteraction = await createInteraction(plan.id, {
+                user_prompt: submitPrompt,
+                interaction_type: type
+            });
+            setInteractions(prev => [...prev, newInteraction]);
+            setPrompt("");
+        } catch (err) {
+            console.error("Failed to create interaction", err);
+            // Ideally we'd show a toast here, but for now we just log it.
+        } finally {
+            setIsCreatingInteraction(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            handleCreateInteraction('other');
+        }
+    };
 
     const discoveries = plan.discoveries || [];
     const sources = [...new Set(discoveries.map(d => d.source))];
@@ -139,18 +170,34 @@ export default function Explore() {
                 <div className="continue-pane__body" style={{ display: continueExpanded ? 'block' : 'none' }}>
                     <div className="continue-pane__inner">
                         <div className="chips">
-                            <button className="chip chip-action">Find more like these</button>
-                            <button className="chip chip-action">All hazardous objects</button>
-                            <button className="chip chip-action">More on 2024 YR4</button>
-                            <button className="chip chip-action">Deep dive on Bennu</button>
+                            <button className="chip chip-action" onClick={() => handleCreateInteraction('find_more', 'Find more like these')} disabled={isCreatingInteraction}>Find more like these</button>
+                            <button className="chip chip-action" onClick={() => handleCreateInteraction('other', 'All hazardous objects')} disabled={isCreatingInteraction}>All hazardous objects</button>
+                            <button className="chip chip-action" onClick={() => handleCreateInteraction('enrich', 'More on 2024 YR4')} disabled={isCreatingInteraction}>More on 2024 YR4</button>
+                            <button className="chip chip-action" onClick={() => handleCreateInteraction('enrich', 'Deep dive on Bennu')} disabled={isCreatingInteraction}>Deep dive on Bennu</button>
                         </div>
                         <div className="continue-input-row" style={{ display: 'flex', gap: '8px' }}>
-                            <input type="text" className="continue-input" placeholder="What would you like to explore next?" style={{ flex: 1 }} />
-                            <button className="btn-explore" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <circle cx="11" cy="11" r="8" />
-                                    <path d="m21 21-4.35-4.35" />
-                                </svg>
+                            <input 
+                                type="text" 
+                                className="continue-input" 
+                                placeholder="What would you like to explore next?" 
+                                style={{ flex: 1 }} 
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                disabled={isCreatingInteraction}
+                            />
+                            <button 
+                                className="btn-explore" 
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                                onClick={() => handleCreateInteraction('other')}
+                                disabled={isCreatingInteraction || !prompt.trim()}
+                            >
+                                {isCreatingInteraction ? <Loader2 size={15} className="spinner" /> : (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="11" cy="11" r="8" />
+                                        <path d="m21 21-4.35-4.35" />
+                                    </svg>
+                                )}
                                 Explore
                             </button>
                         </div>
