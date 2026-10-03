@@ -150,4 +150,4 @@ class InteractionCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 f"Discoveries {list(invalid_ids)} do not belong to this SpacePlan."
             )
-        return value
+        return value

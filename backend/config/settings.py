@@ -35,6 +35,8 @@ if not SECRET_KEY:
     else:
         raise ValueError("DJANGO_SECRET_KEY must be set in production (DEBUG=False).")
 
+CREDENTIAL_ENCRYPTION_KEY = os.getenv("CREDENTIAL_ENCRYPTION_KEY")
+
 ALLOWED_HOSTS = [
     h.strip()
     for h in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")

@@ -257,3 +257,63 @@ class InteractionTests(TestCase):
         self.assertEqual(response.data["status"], "pending")
         self.assertIsNone(response.data["completed_at"])
 
+class CredentialEncryptionTests(TestCase):
+    def setUp(self):
+        from cryptography.fernet import Fernet
+        self.test_key = Fernet.generate_key().decode('utf-8')
+
+    def test_encrypt_decrypt_round_trip(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            from api.services.credentials import encrypt_credential, decrypt_credential
+            plaintext = "sk-or-test-key-12345"
+            ciphertext = encrypt_credential(plaintext)
+            
+            # Ciphertext differs from plaintext
+            self.assertNotEqual(ciphertext, plaintext)
+            self.assertNotIn(plaintext, ciphertext)
+            
+            # Round trip returns original
+            decrypted = decrypt_credential(ciphertext)
+            self.assertEqual(decrypted, plaintext)
+
+    def test_randomized_encryption(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            from api.services.credentials import encrypt_credential
+            plaintext = "sk-test"
+            cipher1 = encrypt_credential(plaintext)
+            cipher2 = encrypt_credential(plaintext)
+            # Fernet includes a timestamp/IV, so identical plaintexts produce different ciphertexts
+            self.assertNotEqual(cipher1, cipher2)
+
+    def test_missing_key_fails_securely(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=None):
+            from api.services.credentials import encrypt_credential
+            from django.core.exceptions import ImproperlyConfigured
+            with self.assertRaises(ImproperlyConfigured):
+                encrypt_credential("test")
+
+    def test_invalid_key_fails_securely(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY="invalid-key"):
+            from api.services.credentials import encrypt_credential
+            from django.core.exceptions import ImproperlyConfigured
+            with self.assertRaises(ImproperlyConfigured):
+                encrypt_credential("test")
+
+    def test_decryption_with_wrong_key_fails(self):
+        from cryptography.fernet import Fernet
+        wrong_key = Fernet.generate_key().decode('utf-8')
+        
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            from api.services.credentials import encrypt_credential, decrypt_credential
+            ciphertext = encrypt_credential("secret")
+            
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=wrong_key):
+            # Using the wrong key should raise ValueError without leaking internals
+            with self.assertRaises(ValueError):
+                decrypt_credential(ciphertext)
+
+    def test_decryption_with_corrupted_ciphertext_fails(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            from api.services.credentials import decrypt_credential
+            with self.assertRaises(ValueError):
+                decrypt_credential("not-a-valid-fernet-token")
