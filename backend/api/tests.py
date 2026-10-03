@@ -437,3 +437,123 @@ class CredentialAPITests(TestCase):
             
             # Non-existent behaves RESTfully
             self.assertEqual(self.client_a.delete(reverse('credential_destroy', args=['openrouter'])).status_code, status.HTTP_404_NOT_FOUND)
+
+from unittest.mock import patch
+import requests
+
+class ProviderValidationTests(TestCase):
+    def setUp(self):
+        from cryptography.fernet import Fernet
+        self.test_key = Fernet.generate_key().decode('utf-8')
+        
+        self.user_a = User.objects.create_user(username="usera", password="password123")
+        self.client_a = APIClient()
+        self.client_a.force_authenticate(user=self.user_a)
+        
+        self.user_b = User.objects.create_user(username="userb", password="password123")
+        self.client_b = APIClient()
+        self.client_b.force_authenticate(user=self.user_b)
+        
+        # Give user A an openrouter and nasa key
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            from api.services.credentials import encrypt_credential
+            from api.models import ProviderCredential
+            ProviderCredential.objects.create(
+                user=self.user_a,
+                provider="openrouter",
+                encrypted_key=encrypt_credential("sk-or-valid"),
+                key_hint="valid",
+            )
+            ProviderCredential.objects.create(
+                user=self.user_a,
+                provider="nasa",
+                encrypted_key=encrypt_credential("nasa-valid"),
+                key_hint="valid",
+            )
+            
+    def test_unauth_validation_rejected(self):
+        client = APIClient()
+        url = reverse('credential_validate', args=['openrouter'])
+        self.assertEqual(client.post(url).status_code, status.HTTP_401_UNAUTHORIZED)
+        
+    def test_validate_other_user_credential_404(self):
+        url = reverse('credential_validate', args=['openrouter'])
+        # User B trying to validate, but B has no openrouter key
+        self.assertEqual(self.client_b.post(url).status_code, status.HTTP_404_NOT_FOUND)
+        
+    def test_unsupported_provider(self):
+        url = reverse('credential_validate', args=['aws'])
+        self.assertEqual(self.client_a.post(url).status_code, status.HTTP_400_BAD_REQUEST)
+        
+    @patch('api.services.provider_validation.requests.get')
+    def test_openrouter_valid(self, mock_get):
+        mock_resp = requests.Response()
+        mock_resp.status_code = 200
+        mock_get.return_value = mock_resp
+        
+        url = reverse('credential_validate', args=['openrouter'])
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            resp = self.client_a.post(url)
+            
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["is_valid"])
+        self.assertIsNotNone(resp.data["validated_at"])
+        
+        # Check HTTP mock was called with correct decrypted key
+        mock_get.assert_called_once()
+        self.assertEqual(mock_get.call_args[1]["headers"]["Authorization"], "Bearer sk-or-valid")
+        
+        # Plaintext is not exposed
+        self.assertNotIn("sk-or-valid", str(resp.data))
+        
+    @patch('api.services.provider_validation.requests.get')
+    def test_openrouter_invalid(self, mock_get):
+        mock_resp = requests.Response()
+        mock_resp.status_code = 401
+        mock_get.return_value = mock_resp
+        
+        url = reverse('credential_validate', args=['openrouter'])
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            resp = self.client_a.post(url)
+            
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["is_valid"])
+        self.assertIsNotNone(resp.data["validated_at"])
+        
+        # Verify db was updated
+        from api.models import ProviderCredential
+        cred = ProviderCredential.objects.get(user=self.user_a, provider="openrouter")
+        self.assertFalse(cred.is_valid)
+        
+    @patch('api.services.provider_validation.requests.get')
+    def test_openrouter_transient_error(self, mock_get):
+        mock_get.side_effect = requests.RequestException("Timeout")
+        
+        url = reverse('credential_validate', args=['openrouter'])
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            resp = self.client_a.post(url)
+            
+        self.assertEqual(resp.status_code, status.HTTP_502_BAD_GATEWAY)
+        
+        # Existing state should remain None (since it started as None)
+        from api.models import ProviderCredential
+        cred = ProviderCredential.objects.get(user=self.user_a, provider="openrouter")
+        self.assertIsNone(cred.is_valid)
+
+    @patch('api.services.provider_validation.requests.get')
+    def test_nasa_valid(self, mock_get):
+        mock_resp = requests.Response()
+        mock_resp.status_code = 200
+        mock_get.return_value = mock_resp
+        
+        url = reverse('credential_validate', args=['nasa'])
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            resp = self.client_a.post(url)
+            
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["is_valid"])
+        
+        mock_get.assert_called_once()
+        self.assertEqual(mock_get.call_args[0][0], "https://science.nasa.gov/wp-json/wp/v2/apod-basic")
+        self.assertEqual(mock_get.call_args[1]["params"]["api_key"], "nasa-valid")
+        self.assertNotIn("nasa-valid", str(resp.data))

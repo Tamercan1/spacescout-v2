@@ -1,7 +1,9 @@
 from .models import User, SpacePlan, Discovery, Interaction, ProviderCredential
 from .app_services.space_plan import save_space_plan
 from .engine.space_planner import run_space_planner
-from .services.credentials import encrypt_credential, generate_key_hint
+from .services.credentials import encrypt_credential, generate_key_hint, decrypt_credential
+from .services.provider_validation import validate_provider_credential, ValidationStatus
+from django.utils import timezone
 
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -180,3 +182,54 @@ class ProviderCredentialDestroyView(APIView):
         if deleted:
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+class ProviderCredentialValidateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, provider):
+        valid_providers = [choice[0] for choice in ProviderCredential.PROVIDER_CHOICES]
+        if provider not in valid_providers:
+            return Response({"detail": "Unsupported provider."}, status=status.HTTP_400_BAD_REQUEST)
+
+        credential = get_object_or_404(ProviderCredential, user=request.user, provider=provider)
+        
+        try:
+            raw_key = decrypt_credential(credential.encrypted_key)
+        except Exception:
+            return Response({"detail": "Credential configuration error. Please re-enter your key."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        validation_result = validate_provider_credential(provider, raw_key)
+        
+        # We explicitly clear raw_key from memory as soon as we're done
+        del raw_key
+        
+        if validation_result["status"] == ValidationStatus.VALID:
+            credential.is_valid = True
+            credential.last_validated_at = timezone.now()
+            credential.save(update_fields=['is_valid', 'last_validated_at'])
+            return Response({
+                "provider": provider,
+                "is_valid": True,
+                "validated_at": credential.last_validated_at
+            })
+            
+        elif validation_result["status"] == ValidationStatus.INVALID:
+            credential.is_valid = False
+            credential.last_validated_at = timezone.now()
+            credential.save(update_fields=['is_valid', 'last_validated_at'])
+            return Response({
+                "provider": provider,
+                "is_valid": False,
+                "validated_at": credential.last_validated_at,
+                "detail": validation_result["detail"]
+            })
+            
+        else: # TRANSIENT_ERROR
+            # We do NOT update is_valid for transient errors to avoid resetting a previously valid state
+            return Response({
+                "provider": provider,
+                "is_valid": credential.is_valid,
+                "validated_at": credential.last_validated_at,
+                "detail": validation_result["detail"]
+            }, status=status.HTTP_502_BAD_GATEWAY)
