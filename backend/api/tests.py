@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
-from .models import User, UserProfile, SpacePlan, Discovery
+from .models import User, UserProfile, SpacePlan, Discovery, Interaction
 
 
 class AuthenticationTests(TestCase):
@@ -151,3 +151,109 @@ class SpacePlanTests(TestCase):
         
         self.plan2.refresh_from_db()
         self.assertNotEqual(self.plan2.title, "Stolen Plan")
+
+
+class InteractionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user1 = User.objects.create_user(username="user1", password="testpassword123")
+        self.user2 = User.objects.create_user(username="user2", password="testpassword123")
+
+        self.plan1 = SpacePlan.objects.create(
+            user=self.user1, title="Plan 1", prompt="test", status="completed"
+        )
+        self.discovery1 = Discovery.objects.create(
+            space_plan=self.plan1, title="Discovery A", type="neo", source="neows", summary="A"
+        )
+        self.discovery2 = Discovery.objects.create(
+            space_plan=self.plan1, title="Discovery B", type="neo", source="neows", summary="B"
+        )
+
+        self.plan2 = SpacePlan.objects.create(
+            user=self.user2, title="Plan 2", prompt="test2", status="completed"
+        )
+        self.discovery_other = Discovery.objects.create(
+            space_plan=self.plan2, title="Other Discovery", type="apod", source="apod", summary="C"
+        )
+
+        self.interactions_url = reverse('interaction_list_create', args=[self.plan1.id])
+        self.interactions_url2 = reverse('interaction_list_create', args=[self.plan2.id])
+
+    def test_create_interaction(self):
+        self.client.force_authenticate(user=self.user1)
+        data = {
+            "user_prompt": "Find more asteroids like this",
+            "interaction_type": "find_more",
+        }
+        response = self.client.post(self.interactions_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["user_prompt"], "Find more asteroids like this")
+        self.assertEqual(response.data["interaction_type"], "find_more")
+        self.assertEqual(response.data["status"], "pending")
+        self.assertEqual(response.data["space_plan"], self.plan1.id)
+
+    def test_create_interaction_with_targets(self):
+        self.client.force_authenticate(user=self.user1)
+        data = {
+            "user_prompt": "Compare these two",
+            "interaction_type": "compare",
+            "target_discoveries": [self.discovery1.id, self.discovery2.id],
+        }
+        response = self.client.post(self.interactions_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data["target_discoveries"]), 2)
+
+    def test_create_interaction_rejects_invalid_targets(self):
+        """Target discoveries from another SpacePlan should be rejected."""
+        self.client.force_authenticate(user=self.user1)
+        data = {
+            "user_prompt": "Compare these",
+            "interaction_type": "compare",
+            "target_discoveries": [self.discovery_other.id],
+        }
+        response = self.client.post(self.interactions_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_list_interactions(self):
+        self.client.force_authenticate(user=self.user1)
+        # Create two interactions
+        Interaction.objects.create(
+            space_plan=self.plan1, user_prompt="First", interaction_type="find_more"
+        )
+        Interaction.objects.create(
+            space_plan=self.plan1, user_prompt="Second", interaction_type="enrich"
+        )
+        response = self.client.get(self.interactions_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        # Chronological order
+        self.assertEqual(response.data[0]["user_prompt"], "First")
+        self.assertEqual(response.data[1]["user_prompt"], "Second")
+
+    def test_cannot_list_other_users_interactions(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.interactions_url2)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_create_interaction_on_other_users_plan(self):
+        self.client.force_authenticate(user=self.user1)
+        data = {
+            "user_prompt": "Hack",
+            "interaction_type": "other",
+        }
+        response = self.client.post(self.interactions_url2, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_set_server_controlled_fields(self):
+        """Client should not be able to override status, completed_at, etc."""
+        self.client.force_authenticate(user=self.user1)
+        data = {
+            "user_prompt": "Test",
+            "interaction_type": "other",
+        }
+        response = self.client.post(self.interactions_url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # Status is always set to pending by the server
+        self.assertEqual(response.data["status"], "pending")
+        self.assertIsNone(response.data["completed_at"])
+

@@ -1,5 +1,5 @@
 import api from "./axios";
-import type { SpacePlan, SpacePlanRequest } from "../types/planner";
+import type { SpacePlan, SpacePlanRequest, Interaction, InteractionCreateRequest } from "../types/planner";
 
 
 export async function createSpacePlan(prompt: string): Promise<SpacePlan> {
@@ -37,5 +37,20 @@ export async function deleteSpacePlan(pk: number): Promise<void>{
 
 export async function updateSpacePlan(pk: number, data: Partial<SpacePlan>): Promise<SpacePlan> {
     const response = await api.patch<SpacePlan>(`/plans/${pk}/`, data);
+    return response.data;
+}
+
+
+// ============================================================
+// INTERACTION API
+// ============================================================
+
+export async function getInteractions(spacePlanId: number): Promise<Interaction[]> {
+    const response = await api.get<Interaction[]>(`/plans/${spacePlanId}/interactions/`);
+    return response.data;
+}
+
+export async function createInteraction(spacePlanId: number, data: InteractionCreateRequest): Promise<Interaction> {
+    const response = await api.post<Interaction>(`/plans/${spacePlanId}/interactions/`, data);
     return response.data;
 }

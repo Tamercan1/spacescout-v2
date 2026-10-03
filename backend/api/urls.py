@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     CreateUserView, CurrentUserView,
     SpacePlanListView, SpacePlanDetailDestroyView, SpacePlanCreateView,
+    InteractionListCreateView,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -12,5 +13,6 @@ urlpatterns = [
     path("auth/me/", CurrentUserView.as_view(), name="current_user"),
     path("plans/", SpacePlanListView.as_view(), name="space_plans"),
     path("plans/<int:pk>/", SpacePlanDetailDestroyView.as_view(), name="space_plan_detail_view"),
-    path("plans/create/", SpacePlanCreateView.as_view(), name='space_plan_create_view')
+    path("plans/create/", SpacePlanCreateView.as_view(), name='space_plan_create_view'),
+    path("plans/<int:space_plan_id>/interactions/", InteractionListCreateView.as_view(), name="interaction_list_create"),
 ]

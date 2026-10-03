@@ -1,4 +1,4 @@
-from .models import User, UserProfile, SpacePlan, Discovery, DiscoveryMedia
+from .models import User, UserProfile, SpacePlan, Discovery, DiscoveryMedia, Interaction
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -93,3 +93,61 @@ class SpacePlanRequestSerializer(serializers.Serializer):
         allow_blank=False,
         trim_whitespace=True,
     )
+
+
+# ============================================================
+# INTERACTION SERIALIZERS
+# ============================================================
+
+class InteractionSerializer(serializers.ModelSerializer):
+    """Read serializer for Interaction — exposes all fields with server-controlled ones read-only."""
+    target_discoveries = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    added_discoveries = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+
+    class Meta:
+        model = Interaction
+        fields = [
+            "id", "space_plan", "user_prompt", "interaction_type",
+            "status", "response", "error_code",
+            "target_discoveries", "added_discoveries",
+            "created_at", "completed_at",
+        ]
+        read_only_fields = [
+            "id", "space_plan", "status", "response", "error_code",
+            "added_discoveries", "completed_at", "created_at",
+        ]
+
+
+class InteractionCreateSerializer(serializers.Serializer):
+    """
+    Write serializer for creating an Interaction.
+    The space_plan is determined from the URL, not from the client payload.
+    target_discoveries are validated to belong to the same SpacePlan.
+    """
+    user_prompt = serializers.CharField(max_length=5000, allow_blank=False, trim_whitespace=True)
+    interaction_type = serializers.ChoiceField(choices=Interaction.INTERACTION_TYPE_CHOICES)
+    target_discoveries = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+    )
+
+    def validate_target_discoveries(self, value):
+        if not value:
+            return value
+
+        space_plan = self.context.get("space_plan")
+        if not space_plan:
+            raise serializers.ValidationError("SpacePlan context is required.")
+
+        existing_ids = set(
+            Discovery.objects.filter(
+                space_plan=space_plan, id__in=value
+            ).values_list("id", flat=True)
+        )
+        invalid_ids = set(value) - existing_ids
+        if invalid_ids:
+            raise serializers.ValidationError(
+                f"Discoveries {list(invalid_ids)} do not belong to this SpacePlan."
+            )
+        return value

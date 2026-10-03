@@ -25,11 +25,11 @@ function DiscoveryModal({discovery, setSelectedCard}: DiscoveryModalProp) {
 
             <div className="detail-fields">
 
-                {discovery.media_url && (
-                    discovery.media_type === "image"
-                    ? <img src={discovery.media_url} alt={discovery.title} />
+                {discovery.media && discovery.media.length > 0 && (
+                    discovery.media[0].media_type === "image"
+                    ? <img src={discovery.media[0].url} alt={discovery.title} />
                     : <video controls>
-                        <source src={discovery.media_url} type="video/mp4" />
+                        <source src={discovery.media[0].url} type="video/mp4" />
                         Your browser does not support the video tag.
                     </video>
                 )}
@@ -63,7 +63,7 @@ function DiscoveryModal({discovery, setSelectedCard}: DiscoveryModalProp) {
                 
                 <div className="view-source">
                     <FileText size={20}/>
-                    <a href={discovery.source} target="_blank" rel="noopener noreferrer">
+                    <a href={discovery.source_url} target="_blank" rel="noopener noreferrer">
                         <h3>View source</h3>
                     </a>
                 </div>

@@ -1,0 +1,51 @@
+
+/* ============================================================
+   CHIPS
+============================================================ */
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  font-size: 0.75rem;
+  color: var(--text-2);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--ease);
+  white-space: nowrap;
+}
+
+.chip:hover {
+  color: var(--text-1);
+  background: var(--border);
+}
+
+.chip svg {
+  color: var(--blue);
+  opacity: 0.8;
+}
+
+@media (max-width: 700px) {
+  .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chip {
+    flex-shrink: 0;
+  }
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+}
