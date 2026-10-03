@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
 from .serializers import (
-    UserSerializer, CurrentUserSerializer,
+    UserSerializer, CurrentUserSerializer, UserProfileSerializer,
     SpacePlanSerializer, SpacePlanRequestSerializer,
     InteractionSerializer, InteractionCreateSerializer,
     ProviderCredentialReadSerializer, ProviderCredentialWriteSerializer,
@@ -31,6 +31,14 @@ class CurrentUserView(APIView):
     def get(self, request):
         serializer = CurrentUserSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request):
+        profile = request.user.profile
+        # We allow partial updates to UserProfile via the root of the request data.
+        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(CurrentUserSerializer(request.user).data)
 
 class SpacePlanListView(generics.ListAPIView):
     serializer_class = SpacePlanSerializer

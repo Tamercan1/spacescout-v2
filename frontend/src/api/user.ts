@@ -22,3 +22,8 @@ export async function completeOnboarding(): Promise<User> {
     const response = await api.post<User>("/auth/onboarding/complete/");
     return response.data;
 }
+
+export async function updateUserProfile(data: Partial<UserProfile>): Promise<User> {
+    const response = await api.patch<User>("/auth/me/", data);
+    return response.data;
+}

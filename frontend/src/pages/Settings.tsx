@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { User, Key, Settings as SettingsIcon, CheckCircle2, AlertCircle, RefreshCw, XCircle } from 'lucide-react';
+import { User, Key, Settings as SettingsIcon, CheckCircle2, AlertCircle, RefreshCw, XCircle, ExternalLink } from 'lucide-react';
 import { getCredentials, saveCredential, deleteCredential, validateCredential } from "../api/credentials";
+import { updateUserProfile } from "../api/user";
 import type { ProviderCredential } from "../types/credentials";
 
 export default function Settings() {
-    const { user } = useAuth();
+    const { user, updateUser } = useAuth();
     const [activeTab, setActiveTab] = useState("account");
 
     // BYOK State
@@ -15,6 +16,33 @@ export default function Settings() {
     const [nasaKey, setNasaKey] = useState("");
     const [loadingProvider, setLoadingProvider] = useState<Record<string, string>>({});
     const [providerError, setProviderError] = useState<Record<string, string | null>>({});
+
+    // Profile State
+    const [preferredModel, setPreferredModel] = useState(user?.profile?.preferred_model || "");
+    const [savingModel, setSavingModel] = useState(false);
+    const [modelSaved, setModelSaved] = useState(false);
+
+    useEffect(() => {
+        if (user?.profile) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setPreferredModel(user.profile.preferred_model || "");
+        }
+    }, [user]);
+
+    const handleSaveModel = async () => {
+        setSavingModel(true);
+        setModelSaved(false);
+        try {
+            const updatedUser = await updateUserProfile({ preferred_model: preferredModel.trim() });
+            updateUser(updatedUser);
+            setModelSaved(true);
+            setTimeout(() => setModelSaved(false), 3000);
+        } catch (error) {
+            console.error("Failed to save model", error);
+        } finally {
+            setSavingModel(false);
+        }
+    };
 
     const fetchCredentials = async () => {
         setCredsLoading(true);
@@ -374,12 +402,62 @@ export default function Settings() {
                         <h3 className="settings-section__title">AI Model</h3>
                         <p className="settings-section__sub">Select which OpenRouter model SpaceScout uses for planning. Requires your own key.</p>
 
-                        <div className="settings-row">
-                            <div>
-                                <div className="settings-row__label">Model</div>
-                                <div className="settings-row__sub">Requires your own OpenRouter key</div>
+                        <div className="settings-row" style={{ alignItems: 'flex-start', paddingBottom: '24px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, paddingRight: '20px' }}>
+                                <div>
+                                    <div className="settings-row__label">Preferred Model</div>
+                                    <div className="settings-row__sub" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                                        <div>The model used for SpaceScout's AI requests.</div>
+                                        <div>
+                                            <a href="https://openrouter.ai/collections/free-models" target="_blank" rel="noopener noreferrer" style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '5px 10px',
+                                                backgroundColor: 'var(--bg-elevated)',
+                                                border: '1px solid var(--border-color)',
+                                                borderRadius: '6px',
+                                                color: 'var(--text-color)',
+                                                textDecoration: 'none',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 500,
+                                                transition: 'background 0.2s'
+                                            }}
+                                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
+                                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-elevated)'}
+                                            >
+                                                Browse Free Models on OpenRouter <ExternalLink size={12} />
+                                            </a>
+                                        </div>
+                                        {!user?.profile?.preferred_model && (
+                                            <span style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Using default: <strong>openrouter/free</strong></span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                            <input type="text" className="settings-input" defaultValue="openrouter/free" />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-end', width: '320px' }}>
+                                <div style={{ width: '100%' }}>
+                                    <input 
+                                        type="text" 
+                                        className="settings-input" 
+                                        style={{ width: '100%' }}
+                                        placeholder="openrouter/free" 
+                                        value={preferredModel}
+                                        onChange={(e) => setPreferredModel(e.target.value)}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    {modelSaved && <span style={{ fontSize: '0.8rem', color: 'var(--green)' }}><CheckCircle2 size={12} style={{display: 'inline', marginBottom: '-2px'}}/> Saved</span>}
+                                    <button 
+                                        className="btn btn-primary" 
+                                        style={{ padding: '5px 10px', fontSize: '0.76rem' }}
+                                        onClick={handleSaveModel}
+                                        disabled={savingModel || preferredModel === (user?.profile?.preferred_model || "")}
+                                    >
+                                        {savingModel ? 'Saving...' : 'Save Preference'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

@@ -58,6 +58,41 @@ class CurrentUserTests(TestCase):
         self.assertIn("profile", response.data)
         self.assertEqual(response.data["profile"]["theme"], "system")
 
+    def test_patch_current_user_unauthenticated(self):
+        response = self.client.patch(self.me_url, {"preferred_model": "openrouter/free"})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_patch_current_user_authenticated(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(self.me_url, {"preferred_model": "openrouter/free"})
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["profile"]["preferred_model"], "openrouter/free")
+        
+        # Verify it persisted
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.preferred_model, "openrouter/free")
+
+    def test_patch_current_user_clear_preference(self):
+        self.client.force_authenticate(user=self.user)
+        self.user.profile.preferred_model = "openrouter/free"
+        self.user.profile.save()
+        
+        response = self.client.patch(self.me_url, {"preferred_model": ""})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["profile"]["preferred_model"], "")
+
+    def test_patch_cannot_modify_other_fields(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(self.me_url, {
+            "preferred_model": "openrouter/free",
+            "username": "hackeduser"
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "testuser")
+
+
 
 class SpacePlanTests(TestCase):
     def setUp(self):
