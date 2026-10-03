@@ -1,6 +1,7 @@
-from .models import User, SpacePlan, Discovery, Interaction
+from .models import User, SpacePlan, Discovery, Interaction, ProviderCredential
 from .app_services.space_plan import save_space_plan
 from .engine.space_planner import run_space_planner
+from .services.credentials import encrypt_credential, generate_key_hint
 
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,6 +13,7 @@ from .serializers import (
     UserSerializer, CurrentUserSerializer,
     SpacePlanSerializer, SpacePlanRequestSerializer,
     InteractionSerializer, InteractionCreateSerializer,
+    ProviderCredentialReadSerializer, ProviderCredentialWriteSerializer,
 )
 
 class CreateUserView(generics.CreateAPIView):
@@ -127,3 +129,54 @@ class InteractionListCreateView(APIView):
             response_serializer.data,
             status=status.HTTP_201_CREATED
         )
+
+# ============================================================
+# CREDENTIAL VIEWS
+# ============================================================
+
+class ProviderCredentialListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        credentials = ProviderCredential.objects.filter(user=request.user)
+        serializer = ProviderCredentialReadSerializer(credentials, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = ProviderCredentialWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        provider = serializer.validated_data["provider"]
+        raw_key = serializer.validated_data["raw_key"]
+        
+        encrypted_key = encrypt_credential(raw_key)
+        key_hint = generate_key_hint(raw_key)
+        
+        credential, created = ProviderCredential.objects.update_or_create(
+            user=request.user,
+            provider=provider,
+            defaults={
+                "encrypted_key": encrypted_key,
+                "key_hint": key_hint,
+                "is_valid": None,
+                "last_validated_at": None,
+            }
+        )
+        
+        response_serializer = ProviderCredentialReadSerializer(credential)
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(response_serializer.data, status=status_code)
+
+
+class ProviderCredentialDestroyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, provider):
+        valid_providers = [choice[0] for choice in ProviderCredential.PROVIDER_CHOICES]
+        if provider not in valid_providers:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        deleted, _ = ProviderCredential.objects.filter(user=request.user, provider=provider).delete()
+        if deleted:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_404_NOT_FOUND)

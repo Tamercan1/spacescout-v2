@@ -317,3 +317,123 @@ class CredentialEncryptionTests(TestCase):
             from api.services.credentials import decrypt_credential
             with self.assertRaises(ValueError):
                 decrypt_credential("not-a-valid-fernet-token")
+
+class CredentialAPITests(TestCase):
+    def setUp(self):
+        from cryptography.fernet import Fernet
+        self.test_key = Fernet.generate_key().decode('utf-8')
+        
+        self.client_a = APIClient()
+        self.user_a = User.objects.create_user(username="usera", password="password123")
+        self.client_a.force_authenticate(user=self.user_a)
+        
+        self.client_b = APIClient()
+        self.user_b = User.objects.create_user(username="userb", password="password123")
+        self.client_b.force_authenticate(user=self.user_b)
+        
+        self.unauth_client = APIClient()
+        self.url = reverse('credential_list_create')
+
+    def test_unauthenticated_requests_rejected(self):
+        self.assertEqual(self.unauth_client.get(self.url).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.unauth_client.post(self.url, {}).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.unauth_client.delete(reverse('credential_destroy', args=['openrouter'])).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_creation_and_leakage_audit(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            plaintext = "sk-or-secret-key-1234"
+            response = self.client_a.post(self.url, {"provider": "openrouter", "raw_key": plaintext})
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+            
+            # Response does not contain plaintext or ciphertext
+            resp_str = str(response.data)
+            self.assertNotIn(plaintext, resp_str)
+            self.assertNotIn("encrypted_key", resp_str)
+            self.assertNotIn("raw_key", resp_str)
+            
+            # Key hint generated safely
+            self.assertEqual(response.data["key_hint"], "••••1234")
+            
+            # DB encrypted value != plaintext
+            from api.models import ProviderCredential
+            cred = ProviderCredential.objects.get(user=self.user_a, provider="openrouter")
+            self.assertNotEqual(cred.encrypted_key, plaintext)
+
+    def test_ownership(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            self.client_a.post(self.url, {"provider": "openrouter", "raw_key": "sk-or-a"})
+            self.client_b.post(self.url, {"provider": "nasa", "raw_key": "nasa-b"})
+            
+            # A sees A, B sees B
+            resp_a = self.client_a.get(self.url)
+            self.assertEqual(len(resp_a.data), 1)
+            self.assertEqual(resp_a.data[0]["provider"], "openrouter")
+            
+            resp_b = self.client_b.get(self.url)
+            self.assertEqual(len(resp_b.data), 1)
+            self.assertEqual(resp_b.data[0]["provider"], "nasa")
+            
+            # A cannot delete B's
+            del_resp = self.client_a.delete(reverse('credential_destroy', args=['nasa']))
+            self.assertEqual(del_resp.status_code, status.HTTP_404_NOT_FOUND)
+            
+            # Credential still exists for B
+            self.assertEqual(len(self.client_b.get(self.url).data), 1)
+
+    def test_replacement(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            from api.models import ProviderCredential
+            self.client_a.post(self.url, {"provider": "openrouter", "raw_key": "sk-or-1111"})
+            cred1 = ProviderCredential.objects.get(user=self.user_a, provider="openrouter")
+            
+            # Simulate it was validated
+            cred1.is_valid = True
+            cred1.save()
+            
+            # POST another key
+            resp = self.client_a.post(self.url, {"provider": "openrouter", "raw_key": "sk-or-2222"})
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertEqual(resp.data["key_hint"], "••••2222")
+            self.assertIsNone(resp.data["is_valid"])
+            
+            # Only one exists
+            self.assertEqual(ProviderCredential.objects.count(), 1)
+            cred2 = ProviderCredential.objects.get(user=self.user_a, provider="openrouter")
+            self.assertNotEqual(cred1.encrypted_key, cred2.encrypted_key)
+
+    def test_validation_errors(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            # Invalid provider
+            resp = self.client_a.post(self.url, {"provider": "invalid", "raw_key": "sk-or-1234"})
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertNotIn("sk-or-1234", str(resp.data))
+            
+            # Missing raw_key
+            self.assertEqual(self.client_a.post(self.url, {"provider": "openrouter"}).status_code, status.HTTP_400_BAD_REQUEST)
+            
+            # Empty raw_key
+            self.assertEqual(self.client_a.post(self.url, {"provider": "openrouter", "raw_key": "  "}).status_code, status.HTTP_400_BAD_REQUEST)
+            
+            # Client cannot provide fields
+            resp2 = self.client_a.post(self.url, {
+                "provider": "openrouter", 
+                "raw_key": "sk-or-1234",
+                "is_valid": True,
+                "key_hint": "hack",
+                "user": self.user_b.id
+            })
+            self.assertEqual(resp2.status_code, status.HTTP_201_CREATED)
+            self.assertIsNone(resp2.data["is_valid"])
+            self.assertEqual(resp2.data["key_hint"], "••••1234")
+            
+            from api.models import ProviderCredential
+            cred = ProviderCredential.objects.get(provider="openrouter")
+            self.assertEqual(cred.user, self.user_a)
+
+    def test_deletion(self):
+        with self.settings(CREDENTIAL_ENCRYPTION_KEY=self.test_key):
+            self.client_a.post(self.url, {"provider": "openrouter", "raw_key": "sk-or-a"})
+            self.assertEqual(self.client_a.delete(reverse('credential_destroy', args=['openrouter'])).status_code, status.HTTP_204_NO_CONTENT)
+            
+            # Non-existent behaves RESTfully
+            self.assertEqual(self.client_a.delete(reverse('credential_destroy', args=['openrouter'])).status_code, status.HTTP_404_NOT_FOUND)

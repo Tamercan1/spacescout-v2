@@ -1,4 +1,4 @@
-from .models import User, UserProfile, SpacePlan, Discovery, DiscoveryMedia, Interaction
+from .models import User, UserProfile, SpacePlan, Discovery, DiscoveryMedia, Interaction, ProviderCredential
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -150,4 +150,18 @@ class InteractionCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 f"Discoveries {list(invalid_ids)} do not belong to this SpacePlan."
             )
-        return value
+        return value
+
+# ============================================================
+# CREDENTIAL SERIALIZERS
+# ============================================================
+
+class ProviderCredentialReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProviderCredential
+        fields = ["provider", "key_hint", "is_valid", "last_validated_at", "created_at", "updated_at"]
+        read_only_fields = fields
+
+class ProviderCredentialWriteSerializer(serializers.Serializer):
+    provider = serializers.ChoiceField(choices=ProviderCredential.PROVIDER_CHOICES)
+    raw_key = serializers.CharField(write_only=True, required=True, allow_blank=False, trim_whitespace=True)
