@@ -63,9 +63,6 @@ class GenericOrchestrator(BaseOrchestrator):
         )
 
         all_discoveries = []
-        last_result_type = ResultType.ANALYSIS.value
-        last_result_data: dict[str, Any] = {}
-
         for round_idx in range(MAX_TOOL_ROUNDS):
             try:
                 llm_response = self.provider.generate(
@@ -100,23 +97,6 @@ class GenericOrchestrator(BaseOrchestrator):
                 ))
             else:
                 messages.append(LLMMessage(role="assistant", content=llm_response.content))
-                
-                # If the last tool result was ANALYSIS (or no tool was run), we populate an analysis card
-                if last_result_type == ResultType.ANALYSIS.value:
-                    last_result_data = {
-                        "title": "Analysis Result",
-                        "summary": "AI response",
-                        "sections": [
-                            {"heading": "Response", "content": llm_response.content or ""}
-                        ]
-                    }
-                else:
-                    # Append the final assistant commentary if it's not empty, storing it inside the existing specific result card
-                    if llm_response.content:
-                        if "explanation" in last_result_data:
-                            last_result_data["explanation"] = f"{llm_response.content}\n\n{last_result_data['explanation']}"
-                        elif "summary" in last_result_data:
-                            last_result_data["summary"] = f"{llm_response.content}\n\n{last_result_data['summary']}"
                 break
 
             # Execute tool calls
@@ -161,9 +141,6 @@ class GenericOrchestrator(BaseOrchestrator):
                         tool_call_id=call_id
                     ))
                     
-                    last_result_type = tool_result.result_type
-                    last_result_data = tool_result.data
-                    
                 except ToolExecutionError as tee:
                     messages.append(LLMMessage(
                         role="tool",
@@ -184,11 +161,22 @@ class GenericOrchestrator(BaseOrchestrator):
                 error_message="The model exceeded the maximum number of tool iterations."
             )
 
+        # Provide a generic analysis result containing the final assistant message
+        final_content = ""
+        if llm_response and llm_response.content:
+            final_content = llm_response.content
+
         return OrchestratorResult(
             success=True,
             response={
-                "result_type": last_result_type,
-                "content": last_result_data,
+                "result_type": ResultType.ANALYSIS.value,
+                "content": {
+                    "title": "Analysis Result",
+                    "summary": "AI Response",
+                    "sections": [
+                        {"heading": "Response", "content": final_content}
+                    ]
+                },
                 "metadata": {}
             },
             discoveries=all_discoveries
