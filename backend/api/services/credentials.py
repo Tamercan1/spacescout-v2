@@ -36,7 +36,8 @@ def generate_key_hint(raw_key: str) -> str:
 
 def get_provider_key(user, provider: str) -> str | None:
     """Retrieve and decrypt a user's credential for a specific provider."""
-    credential = ProviderCredential.objects.filter(user=user, provider=provider).first()
+    user_id = user.id if hasattr(user, 'id') else user
+    credential = ProviderCredential.objects.filter(user_id=user_id, provider=provider).first()
     if not credential:
         return None
     return decrypt_credential(credential.encrypted_key)

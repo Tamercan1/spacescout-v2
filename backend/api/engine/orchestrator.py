@@ -57,7 +57,6 @@ class GenericOrchestrator(BaseOrchestrator):
         tools_schema = self.registry.get_openai_schemas()
         
         tool_context = ToolExecutionContext(
-            nasa_api_key=context.nasa_api_key,
             space_plan_id=context.space_plan_id,
             user_id=context.user_id
         )

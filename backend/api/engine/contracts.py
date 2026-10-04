@@ -426,12 +426,9 @@ class ToolExecutionContext:
     the full database or orchestrator internals.
 
     Attributes:
-        nasa_api_key:      Resolved NASA API key (user or application default).
-                           NEVER stored in results, logs, or responses.
         space_plan_id:     The SpacePlan this execution belongs to.
         user_id:           The authenticated user's ID.
     """
-    nasa_api_key: str | None = None
     space_plan_id: int | None = None
     user_id: int | None = None
 
@@ -553,10 +550,6 @@ class OrchestratorContext:
                               curated summary to avoid sending excessive data
                               to the LLM while still enabling follow-up context.
         preferred_model:      User's preferred LLM model (from UserProfile).
-        openrouter_api_key:   Resolved OpenRouter credential.
-                              NEVER stored in results, logs, or responses.
-        nasa_api_key:         Resolved NASA credential.
-                              NEVER stored in results, logs, or responses.
     """
     user_id: int
     space_plan_id: int
@@ -568,8 +561,6 @@ class OrchestratorContext:
     target_discoveries: list[dict[str, Any]] = field(default_factory=list)
     existing_discoveries: list[dict[str, Any]] = field(default_factory=list)
     preferred_model: str = ""
-    openrouter_api_key: str | None = None
-    nasa_api_key: str | None = None
 
 
 # ============================================================

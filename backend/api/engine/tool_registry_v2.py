@@ -88,3 +88,11 @@ class ToolRegistry:
 # Tools register themselves here at import time.
 # The orchestrator imports this instance to discover available tools.
 registry = ToolRegistry()
+
+from .tools.nasa.apod import APODTool
+from .tools.nasa.neows import NeoWsTool
+from .tools.nasa.donki import DonkiTool
+
+registry.register(APODTool())
+registry.register(NeoWsTool())
+registry.register(DonkiTool())

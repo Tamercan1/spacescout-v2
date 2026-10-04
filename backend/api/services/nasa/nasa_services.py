@@ -34,9 +34,9 @@ def get(url, params, timeout=15):
 
 
 # GET ASTRONOMY PICTURES USING NASA'S APOD
-def get_astronomy_picture(date=None):
+def get_astronomy_picture(date=None, api_key=None):
     qparams = {
-        "api_key": API_KEY
+        "api_key": api_key or API_KEY
     }
 
     if date:
@@ -65,9 +65,9 @@ def get_astronomy_picture(date=None):
 
 
 # GET NEAR EART OBJECTS USING NASA'S NEOWS
-def search_near_earth_objects(start_date, end_date):
+def search_near_earth_objects(start_date, end_date, api_key=None):
     qparams = {
-        "api_key": API_KEY,
+        "api_key": api_key or API_KEY,
         "start_date": start_date,
         "end_date": end_date
     }
@@ -108,9 +108,9 @@ def search_near_earth_objects(start_date, end_date):
 
 
 # GET SOLAR FLARES USING NASA'S DONKI FLR
-def get_solar_flares(start_date, end_date):
+def get_solar_flares(start_date, end_date, api_key=None):
     qparams = {
-        "api_key": API_KEY,
+        "api_key": api_key or API_KEY,
         "start_date": start_date,
         "end_date": end_date
     }
