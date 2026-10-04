@@ -195,6 +195,28 @@ class OpenRouterProviderTests(TestCase):
 
     @patch('api.engine.providers.openrouter.openai.OpenAI')
     @patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-env-key"})
+    def test_error_mapping_403(self, mock_openai):
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+        
+        mock_http_response = MagicMock()
+        mock_http_response.status_code = 403
+        
+        mock_client.chat.completions.create.side_effect = openai.PermissionDeniedError(
+            message="Permission denied", 
+            response=mock_http_response,
+            body={}
+        )
+        
+        provider = OpenRouterProvider()
+        with self.assertRaises(ProviderError) as context:
+            provider.generate(messages=[LLMMessage(role="user", content="Hi")])
+            
+        self.assertEqual(context.exception.error_code, OrchestratorErrorCode.INVALID_CREDENTIAL)
+        self.assertNotIn("sk-test-env-key", str(context.exception))
+
+    @patch('api.engine.providers.openrouter.openai.OpenAI')
+    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-env-key"})
     def test_error_mapping_429(self, mock_openai):
         mock_client = MagicMock()
         mock_openai.return_value = mock_client

@@ -76,8 +76,8 @@ class OpenRouterProvider(BaseLLMProvider):
 
     def _map_error(self, exc: Exception) -> ProviderError:
         """Map provider exceptions to generic OrchestratorErrorCode."""
-        if isinstance(exc, openai.AuthenticationError):
-            return ProviderError("Invalid OpenRouter credentials.", OrchestratorErrorCode.INVALID_CREDENTIAL)
+        if isinstance(exc, (openai.AuthenticationError, openai.PermissionDeniedError)):
+            return ProviderError("Invalid OpenRouter credentials or permission denied.", OrchestratorErrorCode.INVALID_CREDENTIAL)
         elif isinstance(exc, openai.RateLimitError):
             return ProviderError("OpenRouter rate limit exceeded.", OrchestratorErrorCode.PROVIDER_RATE_LIMITED)
         elif isinstance(exc, openai.APITimeoutError):
