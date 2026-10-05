@@ -1,4 +1,5 @@
 import type { AnalysisResult, GenericResult, ResultSection } from '../../types/planner';
+import ReactMarkdown from 'react-markdown';
 
 interface GeneralResultCardProps {
     result: AnalysisResult | GenericResult;
@@ -20,7 +21,9 @@ export default function GeneralResultCard({ result }: GeneralResultCardProps) {
         renderContent = analysis.content.sections?.map((section: ResultSection, i: number) => (
             <div key={i} className="result-card__section">
                 <div className="result-card__heading">{section.heading}</div>
-                <div className="result-card__content">{section.content}</div>
+                <div className="result-card__content react-markdown-content">
+                    <ReactMarkdown>{section.content as string}</ReactMarkdown>
+                </div>
             </div>
         ));
     } else {

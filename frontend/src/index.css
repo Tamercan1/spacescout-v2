@@ -1791,3 +1791,77 @@ textarea {
     display: none;
   }
 }
+
+/* ============================================================
+   MARKDOWN CONTENT
+============================================================ */
+.react-markdown-content {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.react-markdown-content p {
+  margin-bottom: 12px;
+}
+
+.react-markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.react-markdown-content ul {
+  list-style-type: disc;
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+.react-markdown-content ol {
+  list-style-type: decimal;
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+.react-markdown-content li {
+  margin-bottom: 6px;
+}
+
+.react-markdown-content strong {
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.react-markdown-content em {
+  font-style: italic;
+}
+
+.react-markdown-content code {
+  background: var(--surface-2);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--text-1);
+}
+
+.react-markdown-content pre {
+  background: var(--surface-2);
+  padding: 12px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.react-markdown-content pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .4;
+  }
+}

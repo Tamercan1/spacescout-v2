@@ -154,6 +154,37 @@ export default function Explore() {
                 {/* Interaction stream */}
                 <div style={{ gridColumn: '1 / -1' }}>
                     <InteractionStream interactions={interactions} />
+                    
+                    {isCreatingInteraction && (
+                        <div className="interaction-stream" style={{ marginTop: interactions.length > 0 ? '12px' : '8px' }}>
+                            {interactions.length === 0 && (
+                                <div className="feed-label">
+                                    <span className="feed-label__text">Follow-up interactions</span>
+                                    <span className="feed-label__line"></span>
+                                    <span className="feed-label__count">1</span>
+                                </div>
+                            )}
+                            <div className="interaction-item">
+                                <div className="interaction-item__context">
+                                    <div className="interaction-item__label">
+                                        <MessageSquare size={14} />
+                                        <span className="interaction-item__type">Follow-up</span>
+                                    </div>
+                                    <div className="interaction-item__prompt">{prompt || "Generating..."}</div>
+                                </div>
+                                <div className="result-card">
+                                    <div className="result-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-2)' }}>
+                                        <Loader2 size={16} className="spinner" /> Analyzing context...
+                                    </div>
+                                    <div style={{ marginTop: '16px' }}>
+                                        <div style={{ width: '100%', height: '14px', background: 'var(--surface-3)', borderRadius: '4px', marginBottom: '8px', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+                                        <div style={{ width: '85%', height: '14px', background: 'var(--surface-3)', borderRadius: '4px', marginBottom: '8px', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+                                        <div style={{ width: '90%', height: '14px', background: 'var(--surface-3)', borderRadius: '4px', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -170,10 +201,10 @@ export default function Explore() {
                 <div className="continue-pane__body" style={{ display: continueExpanded ? 'block' : 'none' }}>
                     <div className="continue-pane__inner">
                         <div className="chips">
-                            <button className="chip chip-action" onClick={() => handleCreateInteraction('find_more', 'Find more like these')} disabled={isCreatingInteraction}>Find more like these</button>
-                            <button className="chip chip-action" onClick={() => handleCreateInteraction('other', 'All hazardous objects')} disabled={isCreatingInteraction}>All hazardous objects</button>
-                            <button className="chip chip-action" onClick={() => handleCreateInteraction('enrich', 'More on 2024 YR4')} disabled={isCreatingInteraction}>More on 2024 YR4</button>
-                            <button className="chip chip-action" onClick={() => handleCreateInteraction('enrich', 'Deep dive on Bennu')} disabled={isCreatingInteraction}>Deep dive on Bennu</button>
+                            <button className="chip chip-action" onClick={() => setPrompt('Find more like these')} disabled={isCreatingInteraction}>Find more like these</button>
+                            <button className="chip chip-action" onClick={() => setPrompt('All hazardous objects')} disabled={isCreatingInteraction}>All hazardous objects</button>
+                            <button className="chip chip-action" onClick={() => setPrompt('More on 2024 YR4')} disabled={isCreatingInteraction}>More on 2024 YR4</button>
+                            <button className="chip chip-action" onClick={() => setPrompt('Deep dive on Bennu')} disabled={isCreatingInteraction}>Deep dive on Bennu</button>
                         </div>
                         <div className="continue-input-row" style={{ display: 'flex', gap: '8px' }}>
                             <input 
