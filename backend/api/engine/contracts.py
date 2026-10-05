@@ -577,17 +577,18 @@ class OrchestratorResult:
 
     Attributes:
         success:      Whether execution completed successfully.
-        response:     The normalized response to store in Interaction.response.
-                      Must conform to the Interaction Response Contract above.
         error_code:   An OrchestratorErrorCode value if success is False.
         error_message: A safe, user-facing error message.
         discoveries:  Normalized discovery data to persist as Discovery records.
+        tool_results: The structured results of all tools executed in this run.
+        llm_content:  The final textual response from the LLM.
     """
     success: bool
-    response: dict[str, Any] = field(default_factory=dict)
     error_code: str = ""
     error_message: str = ""
     discoveries: list[DiscoveryData] = field(default_factory=list)
+    tool_results: list[ToolResult] = field(default_factory=list)
+    llm_content: str = ""
 
 
 class BaseOrchestrator(abc.ABC):

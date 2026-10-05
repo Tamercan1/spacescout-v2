@@ -83,8 +83,8 @@ class TestOrchestrator(unittest.TestCase):
         result = self.orchestrator.execute(self.context)
         
         self.assertTrue(result.success)
-        self.assertEqual(result.response["result_type"], "analysis")
-        self.assertEqual(result.response["content"]["sections"][0]["content"], "Hi there!")
+        self.assertEqual(result.llm_content, "Hi there!")
+        self.assertEqual(len(result.tool_results), 0)
         self.provider.generate.assert_called_once()
 
     def test_one_tool_call(self):
@@ -110,9 +110,9 @@ class TestOrchestrator(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(self.provider.generate.call_count, 2)
         fake_tool.execute_mock.assert_called_once()
-        # Orchestrator result type is generic, not tied to APOD
-        self.assertEqual(result.response["result_type"], "analysis")
-        self.assertEqual(result.response["content"]["sections"][0]["content"], "Here is your APOD.")
+        self.assertEqual(len(result.tool_results), 1)
+        self.assertEqual(result.tool_results[0].result_type, "apod")
+        self.assertEqual(result.llm_content, "Here is your APOD.")
         
         # Verify the tool result was passed to LLM correctly
         second_call_messages = self.provider.generate.call_args_list[1][1]["messages"]
@@ -145,7 +145,8 @@ class TestOrchestrator(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(self.provider.generate.call_count, 3)
         self.assertEqual(fake_tool.execute_mock.call_count, 2)
-        self.assertEqual(result.response["result_type"], "analysis")
+        self.assertEqual(len(result.tool_results), 2)
+        self.assertEqual(result.llm_content, "Final summary.")
         
     def test_case_b_apod_plus_neows(self):
         # Case B - APOD + NeoWs in sequence
@@ -183,9 +184,10 @@ class TestOrchestrator(unittest.TestCase):
         apod_tool.execute_mock.assert_called_once()
         neows_tool.execute_mock.assert_called_once()
         
-        # Final result type is analysis, not neows
-        self.assertEqual(result.response["result_type"], "analysis")
-        self.assertEqual(result.response["content"]["sections"][0]["content"], "Here is the final comparison.")
+        self.assertEqual(len(result.tool_results), 2)
+        self.assertEqual(result.tool_results[0].result_type, "apod")
+        self.assertEqual(result.tool_results[1].result_type, "neows")
+        self.assertEqual(result.llm_content, "Here is the final comparison.")
 
 
     def test_multiple_tool_calls_in_one_response(self):
@@ -215,8 +217,8 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(fake_tool.execute_mock.call_count, 2)
         
         # Case C - Multiple tools in one turn
-        self.assertEqual(result.response["result_type"], "analysis")
-        self.assertEqual(result.response["content"]["sections"][0]["content"], "Both done.")
+        self.assertEqual(len(result.tool_results), 2)
+        self.assertEqual(result.llm_content, "Both done.")
 
     def test_unknown_tool(self):
         # Requesting a tool not in registry
@@ -275,6 +277,8 @@ class TestOrchestrator(unittest.TestCase):
         result = self.orchestrator.execute(self.context)
         
         self.assertTrue(result.success)
+        self.assertEqual(len(result.tool_results), 1)
+        self.assertEqual(result.tool_results[0].result_type, "error")
         second_call_messages = self.provider.generate.call_args_list[1][1]["messages"]
         tool_msg = [m for m in second_call_messages if m.role == "tool"][0]
         self.assertIn("External service down", tool_msg.content)

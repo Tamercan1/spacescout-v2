@@ -62,6 +62,7 @@ class GenericOrchestrator(BaseOrchestrator):
         )
 
         all_discoveries = []
+        all_tool_results = []
         for round_idx in range(MAX_TOOL_ROUNDS):
             try:
                 llm_response = self.provider.generate(
@@ -129,6 +130,7 @@ class GenericOrchestrator(BaseOrchestrator):
                     
                     if tool_result.discoveries:
                         all_discoveries.extend(tool_result.discoveries)
+                    all_tool_results.append(tool_result)
                         
                     tool_response_content = json.dumps({
                         "data": tool_result.data,
@@ -141,6 +143,12 @@ class GenericOrchestrator(BaseOrchestrator):
                     ))
                     
                 except ToolExecutionError as tee:
+                    all_tool_results.append(ToolResult(
+                        tool_name=tc.tool_name,
+                        result_type="error",
+                        data={"error": str(tee)},
+                        metadata={"success": False, "error_code": tee.error_code}
+                    ))
                     messages.append(LLMMessage(
                         role="tool",
                         content=json.dumps({"error": str(tee)}),
@@ -148,6 +156,12 @@ class GenericOrchestrator(BaseOrchestrator):
                     ))
                 except Exception as ex:
                     logger.error(f"Unexpected tool failure: {ex}")
+                    all_tool_results.append(ToolResult(
+                        tool_name=tc.tool_name,
+                        result_type="error",
+                        data={"error": "Unexpected tool execution failure."},
+                        metadata={"success": False, "error_code": OrchestratorErrorCode.TOOL_EXECUTION_FAILED}
+                    ))
                     messages.append(LLMMessage(
                         role="tool",
                         content=json.dumps({"error": "Unexpected tool execution failure."}),
@@ -167,16 +181,7 @@ class GenericOrchestrator(BaseOrchestrator):
 
         return OrchestratorResult(
             success=True,
-            response={
-                "result_type": ResultType.ANALYSIS.value,
-                "content": {
-                    "title": "Analysis Result",
-                    "summary": "AI Response",
-                    "sections": [
-                        {"heading": "Response", "content": final_content}
-                    ]
-                },
-                "metadata": {}
-            },
-            discoveries=all_discoveries
+            discoveries=all_discoveries,
+            tool_results=all_tool_results,
+            llm_content=final_content
         )
