@@ -84,6 +84,13 @@ class NeoWsTool(BaseTool):
         discoveries = []
         objects = response.get("objects", [])
         
+        # Prioritize potentially hazardous objects, then closest distance, and limit to top 10
+        objects.sort(key=lambda x: (
+            not x.get('is_potentially_hazardous', False), 
+            float(x.get('miss_distance_km', 'inf'))
+        ))
+        objects = objects[:10]
+        
         for obj in objects:
             discovery = DiscoveryData(
                 source=self.name,
@@ -104,7 +111,13 @@ class NeoWsTool(BaseTool):
         return ToolResult(
             tool_name=self.name,
             result_type=self.result_type,
-            data=response,
+            data={
+                "title": "Near Earth Objects",
+                "summary": f"Found {response.get('count', 0)} asteroids approaching Earth.",
+                "object_count": response.get("count", 0),
+                "date_range": {"start": start_date, "end": end_date},
+                "objects": response.get("objects", [])
+            },
             discoveries=discoveries,
             metadata={
                 "success": True, 

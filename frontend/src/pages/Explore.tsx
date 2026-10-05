@@ -91,6 +91,17 @@ export default function Explore() {
     };
 
     const discoveries = plan.discoveries || [];
+    
+    const followUpDiscoveryIds = new Set<number>();
+    interactions.forEach(interaction => {
+        if (interaction.added_discoveries) {
+            interaction.added_discoveries.forEach(id => followUpDiscoveryIds.add(id));
+        }
+    });
+    
+    const initialDiscoveries = discoveries.filter(d => !followUpDiscoveryIds.has(d.id));
+    const followUpDiscoveries = discoveries.filter(d => followUpDiscoveryIds.has(d.id));
+    
     const sources = [...new Set(discoveries.map(d => d.source))];
 
     return (
@@ -131,15 +142,29 @@ export default function Explore() {
 
             {/* Scroll area: discoveries + interactions */}
             <div className="scroll-area">
-                {discoveries.length > 0 && (
+                {initialDiscoveries.length > 0 && (
                     <>
                         <div className="feed-label">
-                            <span className="feed-label__text">Discoveries</span>
+                            <span className="feed-label__text">Initial Discoveries</span>
                             <span className="feed-label__line"></span>
-                            <span className="feed-label__count">{discoveries.length}</span>
+                            <span className="feed-label__count">{initialDiscoveries.length}</span>
                         </div>
 
-                        {discoveries.map((discovery: Discovery) => (
+                        {initialDiscoveries.map((discovery: Discovery) => (
+                            <DiscoveryCard key={discovery.id} discovery={discovery} />
+                        ))}
+                    </>
+                )}
+
+                {followUpDiscoveries.length > 0 && (
+                    <>
+                        <div className="feed-label" style={{ marginTop: '24px' }}>
+                            <span className="feed-label__text">Follow-up Discoveries</span>
+                            <span className="feed-label__line"></span>
+                            <span className="feed-label__count">{followUpDiscoveries.length}</span>
+                        </div>
+
+                        {followUpDiscoveries.map((discovery: Discovery) => (
                             <DiscoveryCard key={discovery.id} discovery={discovery} />
                         ))}
                     </>
