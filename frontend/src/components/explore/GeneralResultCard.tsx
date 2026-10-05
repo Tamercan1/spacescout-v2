@@ -1,16 +1,40 @@
-import type { AnalysisResult } from '../../types/planner';
+import type { AnalysisResult, GenericResult, ResultSection } from '../../types/planner';
 
 interface GeneralResultCardProps {
-    result: AnalysisResult;
+    result: AnalysisResult | GenericResult;
 }
 
 /**
- * Renders an analysis-style interaction result.
- * Supports a title and multiple sections with headings and content.
+ * Renders an analysis-style interaction result or a generic fallback.
+ * Supports a title and multiple sections, or raw generic content.
  */
 export default function GeneralResultCard({ result }: GeneralResultCardProps) {
-    const { title, sections } = result.content;
     const failures = result.metadata?.tool_failures as Array<{ tool: string; error: string }> | undefined;
+    
+    let title = "Tool Result";
+    let renderContent: React.ReactNode;
+
+    if (result.result_type === "analysis") {
+        const analysis = result as AnalysisResult;
+        title = analysis.content.title || title;
+        renderContent = analysis.content.sections?.map((section: ResultSection, i: number) => (
+            <div key={i} className="result-card__section">
+                <div className="result-card__heading">{section.heading}</div>
+                <div className="result-card__content">{section.content}</div>
+            </div>
+        ));
+    } else {
+        // GenericResult
+        title = typeof result.content.title === 'string' ? result.content.title : title;
+        renderContent = (
+            <div className="result-card__section">
+                <div className="result-card__heading">Raw Content</div>
+                <div className="result-card__content" style={{ whiteSpace: 'pre-wrap' }}>
+                    {JSON.stringify(result.content, null, 2)}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="result-card">
@@ -25,13 +49,9 @@ export default function GeneralResultCard({ result }: GeneralResultCardProps) {
                 </div>
             )}
 
-            {sections?.map((section, i) => (
-                <div key={i} className="result-card__section">
-                    <div className="result-card__heading">{section.heading}</div>
-                    <div className="result-card__content">{section.content}</div>
-                </div>
-            ))}
+            {renderContent}
         </div>
     );
 }
+
 

@@ -2,7 +2,11 @@ import React from 'react';
 import type { 
     Interaction, 
     InteractionResponse, 
-    AnalysisResult
+    AnalysisResult,
+    ApodResult,
+    NeowsResult,
+    DonkiResult,
+    GenericResult
 } from '../../types/planner';
 import GeneralResultCard from './GeneralResultCard';
 import ApodResultCard from './ApodResultCard';
@@ -11,16 +15,16 @@ import DonkiResultCard from './DonkiResultCard';
 import { Loader2 } from 'lucide-react';
 
 // Central registry for dynamic result cards
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CardRegistry: Record<string, React.FC<{ result: any }>> = {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    analysis: GeneralResultCard as React.FC<{ result: any }>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    apod: ApodResultCard as React.FC<{ result: any }>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    neows: NeowsResultCard as React.FC<{ result: any }>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    donki: DonkiResultCard as React.FC<{ result: any }>,
+const CardRegistry: {
+    analysis: React.FC<{ result: AnalysisResult }>;
+    apod: React.FC<{ result: ApodResult }>;
+    neows: React.FC<{ result: NeowsResult }>;
+    donki: React.FC<{ result: DonkiResult }>;
+} = {
+    analysis: GeneralResultCard,
+    apod: ApodResultCard,
+    neows: NeowsResultCard,
+    donki: DonkiResultCard,
 };
 
 interface InteractionResultProps {
@@ -59,28 +63,19 @@ export default function InteractionResult({ interaction }: InteractionResultProp
     const typedResponse = response as InteractionResponse;
 
     if (typedResponse && 'result_type' in typedResponse) {
-        const CardComponent = CardRegistry[typedResponse.result_type];
+        const resultType = typedResponse.result_type as keyof typeof CardRegistry;
+        const CardComponent = CardRegistry[resultType];
         
         if (CardComponent) {
-            return <CardComponent result={typedResponse} />;
+            // A safe upcast for the dynamically looked-up component
+            const Component = CardComponent as React.FC<{ result: InteractionResponse }>;
+            return <Component result={typedResponse} />;
         }
         
         // Fallback for unknown result types (Phase 5.6 requirements)
         // Wraps the unknown content into a format GeneralResultCard can display
-        const fallbackResult: AnalysisResult = {
-            result_type: "analysis",
-            content: {
-                title: "Tool Result",
-                summary: "Data from an external source.",
-                sections: [
-                    { heading: "Raw Content", content: JSON.stringify(typedResponse.content, null, 2) }
-                ]
-            },
-            discoveries: typedResponse.discoveries || [],
-            metadata: typedResponse.metadata
-        };
-        
-        return <GeneralResultCard result={fallbackResult} />;
+        // Preserves the original result_type by casting to GenericResult
+        return <GeneralResultCard result={typedResponse as GenericResult} />;
     }
 
     // Ultimate fallback for completely unrecognized or empty responses
