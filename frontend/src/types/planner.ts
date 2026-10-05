@@ -84,14 +84,64 @@ export interface ResultSection {
 
 export interface AnalysisResult {
     result_type: "analysis";
-    title: string;
-    sections: ResultSection[];
+    content: {
+        title: string;
+        summary: string;
+        sections: ResultSection[];
+    };
+    discoveries: number[];
+    metadata?: Record<string, unknown>;
 }
 
-export interface DiscoveryResult {
-    result_type: "discovery";
-    discoveries: Discovery[];
+export interface ApodResult {
+    result_type: "apod";
+    content: {
+        title: string;
+        date: string;
+        explanation: string;
+        media_url: string | null;
+        media_type: string | null;
+    };
+    discoveries: number[];
+    metadata?: Record<string, unknown>;
+}
+
+export interface NeowsResult {
+    result_type: "neows";
+    content: {
+        title: string;
+        summary: string;
+        object_count: number;
+        date_range: { start: string; end: string };
+    };
+    discoveries: number[];
+    metadata?: Record<string, unknown>;
+}
+
+export interface DonkiResult {
+    result_type: "donki";
+    content: {
+        title: string;
+        summary: string;
+        event_count: number;
+        date_range: { start: string; end: string };
+    };
+    discoveries: number[];
+    metadata?: Record<string, unknown>;
+}
+
+export interface GenericResult {
+    result_type: string;
+    content: Record<string, unknown>;
+    discoveries: number[];
+    metadata?: Record<string, unknown>;
 }
 
 // Add future result types here and extend this union
-export type InteractionResponse = AnalysisResult | DiscoveryResult | Record<string, unknown>;
+export type InteractionResponse = 
+    | AnalysisResult 
+    | ApodResult 
+    | NeowsResult 
+    | DonkiResult 
+    | GenericResult;
+
