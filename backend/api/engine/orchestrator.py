@@ -49,6 +49,20 @@ class GenericOrchestrator(BaseOrchestrator):
                 content=f"Target discoveries referenced by the user:\n{json.dumps(context.target_discoveries)}"
             ))
 
+        if getattr(context, 'previous_interactions', None):
+            for p_int in context.previous_interactions:
+                messages.append(LLMMessage(role="user", content=p_int.user_prompt))
+                
+                parts = [p_int.assistant_response_summary]
+                if p_int.target_discoveries:
+                    refs = ", ".join(f"{d.get('title', 'Unknown')} (ID: {d.get('id', '')})" for d in p_int.target_discoveries)
+                    parts.append(f"[Targeted context: {refs}]")
+                if p_int.added_discoveries:
+                    refs = ", ".join(f"{d.get('title', 'Unknown')} (ID: {d.get('id', '')})" for d in p_int.added_discoveries)
+                    parts.append(f"[Generated context: {refs}]")
+                    
+                messages.append(LLMMessage(role="assistant", content="\n".join(parts)))
+
         messages.append(LLMMessage(role="user", content=context.user_prompt))
         return messages
 

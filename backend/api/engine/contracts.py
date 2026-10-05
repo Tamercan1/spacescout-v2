@@ -525,6 +525,18 @@ class BaseLLMProvider(abc.ABC):
 # ============================================================
 
 @dataclass
+class PreviousInteractionContext:
+    """
+    Context representing a single historical interaction in the conversation.
+    """
+    interaction_id: str
+    user_prompt: str
+    assistant_response_summary: str
+    target_discoveries: list[dict[str, Any]] = field(default_factory=list)
+    added_discoveries: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class OrchestratorContext:
     """
     The full context available to the orchestrator for a single
@@ -549,6 +561,7 @@ class OrchestratorContext:
                               This is NOT the entire discovery data — it's a
                               curated summary to avoid sending excessive data
                               to the LLM while still enabling follow-up context.
+        previous_interactions: Historical conversation turns for follow-up intelligence.
         preferred_model:      User's preferred LLM model (from UserProfile).
     """
     user_id: int
@@ -560,6 +573,7 @@ class OrchestratorContext:
     interaction_type: str
     target_discoveries: list[dict[str, Any]] = field(default_factory=list)
     existing_discoveries: list[dict[str, Any]] = field(default_factory=list)
+    previous_interactions: list[PreviousInteractionContext] = field(default_factory=list)
     preferred_model: str = ""
 
 

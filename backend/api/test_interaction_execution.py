@@ -138,6 +138,184 @@ class InteractionExecutionTests(TestCase):
         self.assertEqual(interaction.error_code, OrchestratorErrorCode.UNEXPECTED_ERROR)
         self.assertEqual(interaction.response["error"], "An internal system error occurred during execution.")
         
+    @patch("api.engine.orchestrator.GenericOrchestrator.execute")
+    def test_execute_interaction_historical_context(self, mock_execute):
+        import datetime
+        from django.utils import timezone
+        now = timezone.now()
+
+        # Create a past APOD interaction
+        past_interaction_1 = Interaction.objects.create(
+            space_plan=self.space_plan,
+            user_prompt="Show me an APOD",
+            interaction_type="find_more",
+            status="completed",
+            response={
+                "result_type": "apod",
+                "content": {
+                    "title": "A beautiful galaxy",
+                    "explanation": "This is an explanation."
+                },
+                "metadata": {
+                    "synthesis": "I found this galaxy for you."
+                }
+            }
+        )
+        Interaction.objects.filter(id=past_interaction_1.id).update(created_at=now - datetime.timedelta(minutes=10))
+
+        # Create a past Analysis interaction
+        past_interaction_2 = Interaction.objects.create(
+            space_plan=self.space_plan,
+            user_prompt="Analyze this",
+            interaction_type="enrich",
+            status="completed",
+            response={
+                "result_type": "analysis",
+                "content": {
+                    "title": "Consolidated Analysis",
+                    "sections": [
+                        {"heading": "Summary", "content": "This is a summary."},
+                        {"heading": "Synthesis", "content": "Overall looks good."}
+                    ]
+                }
+            }
+        )
+        Interaction.objects.filter(id=past_interaction_2.id).update(created_at=now - datetime.timedelta(minutes=5))
+        
+        # Add target discovery to past_interaction_2 to test lightweight references
+        d = Discovery.objects.create(
+            space_plan=self.space_plan, source="apod", type="image", title="Past target", summary="Test"
+        )
+        past_interaction_2.target_discoveries.add(d)
+
+        mock_execute.return_value = OrchestratorResult(success=True)
+
+        current_interaction = Interaction.objects.create(
+            space_plan=self.space_plan,
+            user_prompt="Compare those",
+            interaction_type="compare",
+            status="pending"
+        )
+        
+        execute_interaction(current_interaction)
+        
+        mock_execute.assert_called_once()
+        context = mock_execute.call_args[0][0]
+        
+        self.assertEqual(len(context.previous_interactions), 2)
+        
+        # Check chronological order (past_interaction_1 then 2)
+        hist_1 = context.previous_interactions[0]
+        self.assertEqual(hist_1.user_prompt, "Show me an APOD")
+        self.assertIn("A beautiful galaxy", hist_1.assistant_response_summary)
+        self.assertIn("This is an explanation.", hist_1.assistant_response_summary)
+        self.assertIn("I found this galaxy", hist_1.assistant_response_summary)
+        
+        hist_2 = context.previous_interactions[1]
+        self.assertEqual(hist_2.user_prompt, "Analyze this")
+        self.assertIn("Consolidated Analysis", hist_2.assistant_response_summary)
+        self.assertIn("Summary: This is a summary.", hist_2.assistant_response_summary)
+        self.assertEqual(len(hist_2.target_discoveries), 1)
+        self.assertEqual(hist_2.target_discoveries[0]["title"], "Past target")
+        self.assertEqual(hist_2.target_discoveries[0]["id"], str(d.id))
+
+    @patch("api.engine.orchestrator.GenericOrchestrator.execute")
+    def test_execute_interaction_historical_context_truncation(self, mock_execute):
+        import datetime
+        from django.utils import timezone
+        now = timezone.now()
+
+        # Create a past interaction with oversized user prompt and synthesis
+        oversized_prompt = "A" * 1000
+        oversized_synthesis = "B" * 2000
+        
+        past_interaction = Interaction.objects.create(
+            space_plan=self.space_plan,
+            user_prompt=oversized_prompt,
+            interaction_type="find_more",
+            status="completed",
+            response={
+                "result_type": "apod",
+                "content": {
+                    "title": "Title",
+                    "explanation": "Exp"
+                },
+                "metadata": {
+                    "synthesis": oversized_synthesis
+                }
+            }
+        )
+        Interaction.objects.filter(id=past_interaction.id).update(created_at=now - datetime.timedelta(minutes=10))
+
+        mock_execute.return_value = OrchestratorResult(success=True)
+
+        current_interaction = Interaction.objects.create(
+            space_plan=self.space_plan,
+            user_prompt="Hello",
+            interaction_type="other",
+            status="pending"
+        )
+        
+        execute_interaction(current_interaction)
+        
+        mock_execute.assert_called_once()
+        context = mock_execute.call_args[0][0]
+        
+        self.assertEqual(len(context.previous_interactions), 1)
+        hist = context.previous_interactions[0]
+        
+        # Verify user prompt truncation (limit 300)
+        self.assertEqual(len(hist.user_prompt), 300)
+        self.assertTrue(hist.user_prompt.endswith("..."))
+        
+        # Verify synthesis/condensed truncation (limit 600)
+        self.assertEqual(len(hist.assistant_response_summary), 600)
+        self.assertTrue(hist.assistant_response_summary.endswith("..."))
+
+    @patch("api.engine.orchestrator.GenericOrchestrator.execute")
+    def test_execute_interaction_spaceplan_isolation(self, mock_execute):
+        import datetime
+        from django.utils import timezone
+        now = timezone.now()
+
+        # Create a completed interaction on a DIFFERENT space plan
+        other_interaction = Interaction.objects.create(
+            space_plan=self.other_plan,
+            user_prompt="I am from Venus",
+            interaction_type="find_more",
+            status="completed",
+            response={"result_type": "analysis"}
+        )
+        Interaction.objects.filter(id=other_interaction.id).update(created_at=now - datetime.timedelta(minutes=10))
+        
+        # Create a completed interaction on the CURRENT space plan
+        my_interaction = Interaction.objects.create(
+            space_plan=self.space_plan,
+            user_prompt="I am from Mars",
+            interaction_type="find_more",
+            status="completed",
+            response={"result_type": "analysis"}
+        )
+        Interaction.objects.filter(id=my_interaction.id).update(created_at=now - datetime.timedelta(minutes=5))
+
+        mock_execute.return_value = OrchestratorResult(success=True)
+
+        current_interaction = Interaction.objects.create(
+            space_plan=self.space_plan,
+            user_prompt="Compare",
+            interaction_type="compare",
+            status="pending"
+        )
+        
+        execute_interaction(current_interaction)
+        
+        mock_execute.assert_called_once()
+        context = mock_execute.call_args[0][0]
+        
+        # Verify only the active plan's interaction is included
+        self.assertEqual(len(context.previous_interactions), 1)
+        self.assertEqual(context.previous_interactions[0].user_prompt, "I am from Mars")
+
     def test_api_invalid_target_discovery(self):
         # Create a discovery belonging to someone else
         other_discovery = Discovery.objects.create(
