@@ -134,6 +134,13 @@ class InteractionListCreateView(APIView):
             )
             interaction.target_discoveries.set(targets)
 
+        # Execute synchronously
+        from .services.interaction_execution import execute_interaction
+        execute_interaction(interaction)
+        
+        # Refresh to get updated status and response
+        interaction.refresh_from_db()
+
         response_serializer = InteractionSerializer(interaction)
         return Response(
             response_serializer.data,

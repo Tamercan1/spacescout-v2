@@ -188,6 +188,8 @@ class SpacePlanTests(TestCase):
         self.assertNotEqual(self.plan2.title, "Stolen Plan")
 
 
+from unittest.mock import patch
+
 class InteractionTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -213,6 +215,13 @@ class InteractionTests(TestCase):
 
         self.interactions_url = reverse('interaction_list_create', args=[self.plan1.id])
         self.interactions_url2 = reverse('interaction_list_create', args=[self.plan2.id])
+        
+        # Prevent API tests from actually running the orchestration pipeline
+        self.patcher = patch('api.services.interaction_execution.execute_interaction')
+        self.mock_execute = self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
 
     def test_create_interaction(self):
         self.client.force_authenticate(user=self.user1)
