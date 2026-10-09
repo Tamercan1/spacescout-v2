@@ -1302,8 +1302,26 @@ textarea {
   background: var(--blue);
 }
 
+.card.type-apod::before,
 .card.type-image::before {
   background: var(--purple);
+}
+
+.card.type-donki::before,
+.card.type-flare::before {
+  background: var(--amber);
+}
+
+.card.type-nasa-images::before {
+  background: #38bdf8;
+}
+
+.card.type-epic::before {
+  background: var(--green);
+}
+
+.card.type-general::before {
+  background: #818cf8;
 }
 
 .card__head {
@@ -1334,8 +1352,26 @@ textarea {
   color: var(--blue);
 }
 
+.card__type.apod,
 .card__type.image {
   color: var(--purple);
+}
+
+.card__type.donki,
+.card__type.flare {
+  color: var(--amber);
+}
+
+.card__type.nasa-images {
+  color: #38bdf8;
+}
+
+.card__type.epic {
+  color: var(--green);
+}
+
+.card__type.general {
+  color: #818cf8;
 }
 
 .card__date {
@@ -1418,6 +1454,107 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 16px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+
+.result-card:hover {
+  border-color: var(--border-2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.result-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: width var(--ease);
+  z-index: 5;
+}
+
+.result-card:hover::before {
+  width: 4px;
+}
+
+/* Color coding by result type */
+.result-card--apod::before {
+  background: var(--purple);
+}
+
+.result-card--neows::before {
+  background: var(--blue);
+}
+
+.result-card--donki::before {
+  background: var(--amber);
+}
+
+.result-card--nasa-images::before {
+  background: #38bdf8;
+}
+
+.result-card--epic::before {
+  background: var(--green);
+}
+
+.result-card--analysis::before,
+.result-card--general::before {
+  background: #818cf8;
+}
+
+/* Polished type badge inside result cards */
+.result-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.result-card__badge--apod {
+  background: var(--purple-dim);
+  color: var(--purple);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+}
+
+.result-card__badge--neows {
+  background: var(--blue-dim);
+  color: var(--blue);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.result-card__badge--donki {
+  background: var(--amber-dim);
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.result-card__badge--nasa-images {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.result-card__badge--epic {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.result-card__badge--analysis,
+.result-card__badge--general {
+  background: rgba(129, 140, 248, 0.12);
+  color: #818cf8;
+  border: 1px solid rgba(129, 140, 248, 0.25);
 }
 
 .result-card--loading {

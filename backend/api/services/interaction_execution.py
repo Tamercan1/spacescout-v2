@@ -89,14 +89,18 @@ def execute_interaction(interaction: Interaction):
                     
             synthesis = metadata.get("synthesis", "")
             
-            parts = [f"Result Type: {result_type}"]
-            if title: parts.append(f"Title: {title}")
-            if summary: parts.append(f"Summary: {summary}")
-            if synthesis: parts.append(f"Synthesis: {synthesis}")
-            
-            condensed = " | ".join(parts)
-            if not condensed or condensed == f"Result Type: {result_type}":
-                condensed = "Action completed successfully."
+            parts = []
+            if title and title != "Response":
+                parts.append(title)
+            if summary and summary != title:
+                parts.append(summary)
+            if synthesis and synthesis != summary:
+                parts.append(synthesis)
+
+            if parts:
+                condensed = "\n\n".join(parts)
+            else:
+                condensed = f"{result_type.replace('_', ' ').capitalize()} request completed successfully."
                 
             if len(condensed) > MAX_HISTORICAL_ASSISTANT_CONTENT_LENGTH:
                 condensed = condensed[:MAX_HISTORICAL_ASSISTANT_CONTENT_LENGTH-3] + "..."

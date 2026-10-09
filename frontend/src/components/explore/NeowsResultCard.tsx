@@ -9,9 +9,11 @@ export default function NeowsResultCard({ result }: NeowsResultCardProps) {
     const failures = result.metadata?.tool_failures as Array<{ tool: string; error: string }> | undefined;
 
     return (
-        <div className="result-card">
+        <div className="result-card result-card--neows">
+            <div className="result-card__badge result-card__badge--neows">
+                <span>☄️ Near-Earth Object</span>
+            </div>
             <div className="result-card__title">
-                <span style={{ marginRight: '8px' }}>☄️</span>
                 {title}
             </div>
             

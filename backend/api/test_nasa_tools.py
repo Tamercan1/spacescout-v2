@@ -6,10 +6,14 @@ from api.serializers import DiscoverySerializer
 from api.engine.tools.nasa.apod import APODTool
 from api.engine.tools.nasa.neows import NeoWsTool
 from api.engine.tools.nasa.donki import DonkiTool
+from api.engine.tools.nasa.nasa_images import NASAImagesTool
+from api.engine.tools.nasa.epic import EPICTool
 from api.engine.tool_registry_v2 import registry
-from api.engine.contracts import ToolExecutionContext, ResultType, OrchestratorResult
+from api.engine.contracts import ToolExecutionContext, ResultType, OrchestratorResult, ToolResult
 from api.engine.result_normalizer import ResultNormalizer
+from api.services.result_persistence import ResultPersistenceService
 from api.services.nasa.nasa_services import get_solar_flares
+from api.models import Interaction
 
 User = get_user_model()
 
@@ -53,6 +57,27 @@ class TestNASATools(TestCase):
         self.assertEqual(discovery.why_interesting, "")
         self.assertEqual(discovery.facts["Feature Date"], "2023-10-01")
         self.assertNotIn("mock_nasa_key", discovery.title)
+        self.assertEqual(len(discovery.media), 1)
+        self.assertEqual(discovery.media[0]["media_type"], "image")
+        self.assertTrue(discovery.media[0]["is_primary"])
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_video_success(self, mock_get, mock_get_provider_key):
+        mock_get.return_value = {
+            "date": "2023-10-02",
+            "title": "A Cosmic Video",
+            "explanation": "A video of space.",
+            "image_url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+            "media_type": "video",
+            "source": "NASA"
+        }
+        tool = APODTool()
+        result = tool.execute(self.context, date="2023-10-02")
+        self.assertTrue(result.metadata.get("success"))
+        discovery = result.discoveries[0]
+        self.assertEqual(discovery.media[0]["media_type"], "video")
+        self.assertTrue(discovery.media[0]["is_primary"])
 
     @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
     @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
@@ -309,4 +334,342 @@ class TestNASATools(TestCase):
         self.assertEqual(card_data["why_interesting"], "A potent coronal mass ejection risk from Active Region 13850.")
         self.assertEqual(card_data["facts"], d1.facts)
         self.assertEqual(card_data["source_url"], "https://ccmc.gsfc.nasa.gov/donki/FLR/2026-10-09T14:00:00-FLR-001")
+
+    # ============================================================
+    # NASA IMAGE AND VIDEO LIBRARY (nasa_images) TESTS
+    # ============================================================
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_success(self, mock_search):
+        mock_search.return_value = {
+            "count": 2,
+            "items": [
+                {
+                    "nasa_id": "PIA01518",
+                    "title": "Jupiter Plume",
+                    "description": "Jupiter volcanic plume captured by spacecraft.",
+                    "date_created": "1999-03-13T14:54:19Z",
+                    "center": "JPL",
+                    "keywords": ["Jupiter", "Voyager", "Volcano"],
+                    "media_type": "image",
+                    "image_url": "https://images-assets.nasa.gov/image/PIA01518/PIA01518~orig.jpg"
+                },
+                {
+                    "nasa_id": "PIA01519",
+                    "title": "Jupiter Rings",
+                    "description": "Faint ring system around Jupiter.",
+                    "date_created": "1999-03-14T10:00:00Z",
+                    "center": "JPL",
+                    "keywords": ["Jupiter", "Rings"],
+                    "media_type": "image",
+                    "image_url": "https://images-assets.nasa.gov/image/PIA01519/PIA01519~orig.jpg"
+                }
+            ]
+        }
+
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="Jupiter")
+
+        mock_search.assert_called_once_with(query="Jupiter", page=1)
+        self.assertEqual(result.tool_name, "nasa_images")
+        self.assertEqual(result.result_type, ResultType.NASA_IMAGES.value)
+        self.assertTrue(result.metadata.get("success"))
+        self.assertEqual(len(result.discoveries), 2)
+
+        d1 = result.discoveries[0]
+        self.assertEqual(d1.source, "nasa_images")
+        self.assertEqual(d1.external_id, "PIA01518")
+        self.assertEqual(d1.title, "Jupiter Plume")
+        self.assertEqual(d1.date, "1999-03-13")
+        self.assertEqual(d1.facts["NASA Center"], "JPL")
+        self.assertEqual(d1.facts["NASA ID"], "PIA01518")
+        self.assertIn("Jupiter", d1.facts["Keywords"])
+        self.assertEqual(len(d1.media), 1)
+        self.assertEqual(d1.media[0]["url"], "https://images-assets.nasa.gov/image/PIA01518/PIA01518~orig.jpg")
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_empty(self, mock_search):
+        mock_search.return_value = {
+            "count": 0,
+            "items": []
+        }
+
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="UnknownCosmicTargetXYZ")
+
+        self.assertEqual(result.result_type, ResultType.NASA_IMAGES.value)
+        self.assertTrue(result.metadata.get("success"))
+        self.assertEqual(result.metadata["count"], 0)
+        self.assertEqual(len(result.discoveries), 0)
+        self.assertIn("No media archive assets found", result.data["summary"])
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_query_relaxation(self, mock_search):
+        mock_search.return_value = {
+            "count": 1,
+            "items": [{
+                "nasa_id": "NH-OSIRIS-01",
+                "title": "OSIRIS-REx Bennu Touchdown",
+                "description": "Tag sample collection at asteroid Bennu.",
+                "date_created": "2020-10-20T12:00:00Z",
+                "center": "GSFC",
+                "keywords": ["OSIRIS-REx", "Bennu"],
+                "media_type": "image",
+                "image_url": "https://images.nasa.gov/osiris.jpg"
+            }],
+            "query": "osiris-rex",
+            "original_query": "celestial body osiris-rex mission"
+        }
+
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="celestial body osiris-rex mission")
+        self.assertTrue(result.metadata.get("success"))
+        self.assertEqual(len(result.discoveries), 1)
+        self.assertEqual(result.data["query"], "osiris-rex")
+        self.assertIn("refined from 'celestial body osiris-rex mission'", result.data["summary"])
+
+    def test_nasa_images_tool_validation(self):
+        tool = NASAImagesTool()
+        with self.assertRaises(ValueError):
+            tool.validate_arguments({})  # missing query
+
+        with self.assertRaises(ValueError):
+            tool.validate_arguments({"query": "   "})  # empty query
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_api_failure(self, mock_search):
+        mock_search.return_value = {"error": "NASA API endpoint returned 503."}
+
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="Jupiter")
+
+        self.assertEqual(result.result_type, "error")
+        self.assertFalse(result.metadata.get("success"))
+        self.assertEqual(result.data["error"], "NASA API endpoint returned 503.")
+        self.assertEqual(len(result.discoveries), 0)
+
+    # ============================================================
+    # NASA EPIC EARTH IMAGERY (epic) TESTS
+    # ============================================================
+
+    @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
+    def test_epic_tool_most_recent_success(self, mock_get_imagery, mock_get_key):
+        mock_get_imagery.return_value = {
+            "date": "2026-10-07",
+            "count": 1,
+            "images": [
+                {
+                    "identifier": "20261007001752",
+                    "caption": "Full disc of Earth captured by EPIC",
+                    "image_name": "epic_1b_20261007001752",
+                    "date": "2026-10-07 00:13:03",
+                    "image_url": "https://epic.gsfc.nasa.gov/archive/natural/2026/10/07/jpg/epic_1b_20261007001752.jpg",
+                    "centroid_coordinates": {"lat": 3.33, "lon": 168.62}
+                }
+            ]
+        }
+
+        tool = EPICTool()
+        result = tool.execute(self.context)
+
+        mock_get_imagery.assert_called_once_with(date=None, api_key="mock_nasa_key")
+        self.assertEqual(result.tool_name, "epic")
+        self.assertEqual(result.result_type, ResultType.EPIC.value)
+        self.assertTrue(result.metadata.get("success"))
+        self.assertEqual(len(result.discoveries), 1)
+
+        discovery = result.discoveries[0]
+        self.assertEqual(discovery.source, "epic")
+        self.assertEqual(discovery.external_id, "20261007001752")
+        self.assertEqual(discovery.date, "2026-10-07")
+        self.assertEqual(discovery.facts["Spacecraft"], "NOAA DSCOVR")
+        self.assertIn("1 million miles", discovery.facts["Position"])
+        self.assertEqual(discovery.facts["Center Latitude"], "3.33°")
+        self.assertEqual(discovery.facts["Center Longitude"], "168.62°")
+        # Ensure direct URL has no API key leaked
+        self.assertEqual(discovery.media[0]["url"], "https://epic.gsfc.nasa.gov/archive/natural/2026/10/07/jpg/epic_1b_20261007001752.jpg")
+        self.assertNotIn("mock_nasa_key", discovery.media[0]["url"])
+
+    @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
+    def test_epic_tool_specific_date_success(self, mock_get_imagery, mock_get_key):
+        mock_get_imagery.return_value = {
+            "date": "2026-10-05",
+            "count": 1,
+            "images": [
+                {
+                    "identifier": "20261005001752",
+                    "caption": "Earth view",
+                    "image_name": "epic_1b_20261005001752",
+                    "date": "2026-10-05 00:13:03",
+                    "image_url": "https://epic.gsfc.nasa.gov/archive/natural/2026/10/05/jpg/epic_1b_20261005001752.jpg",
+                    "centroid_coordinates": {"lat": 0.0, "lon": 0.0}
+                }
+            ]
+        }
+
+        tool = EPICTool()
+        result = tool.execute(self.context, date="2026-10-05")
+
+        mock_get_imagery.assert_called_once_with(date="2026-10-05", api_key="mock_nasa_key")
+        self.assertTrue(result.metadata.get("success"))
+        self.assertEqual(result.discoveries[0].date, "2026-10-05")
+
+    @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
+    def test_epic_tool_empty_date_handling(self, mock_get_imagery, mock_get_key):
+        mock_get_imagery.return_value = {
+            "date": "1990-01-01",
+            "count": 0,
+            "images": []
+        }
+
+        tool = EPICTool()
+        result = tool.execute(self.context, date="1990-01-01")
+
+        self.assertEqual(result.result_type, ResultType.EPIC.value)
+        self.assertTrue(result.metadata.get("success"))
+        self.assertEqual(result.metadata["count"], 0)
+        self.assertEqual(len(result.discoveries), 0)
+        self.assertIn("No DSCOVR EPIC Earth imagery was captured", result.data["summary"])
+
+    def test_epic_tool_date_validation(self):
+        tool = EPICTool()
+        with self.assertRaises(ValueError):
+            tool.validate_arguments({"date": "invalid-date"})
+
+        with self.assertRaises(ValueError):
+            tool.validate_arguments({"date": "2026/10/07"})
+
+        # Valid date succeeds
+        validated = tool.validate_arguments({"date": "2026-10-07"})
+        self.assertEqual(validated["date"], "2026-10-07")
+
+    @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
+    def test_epic_tool_api_failure(self, mock_get_imagery, mock_get_key):
+        mock_get_imagery.return_value = {"error": "NASA API key was rejected."}
+
+        tool = EPICTool()
+        result = tool.execute(self.context)
+
+        self.assertEqual(result.result_type, "error")
+        self.assertFalse(result.metadata.get("success"))
+        self.assertEqual(result.data["error"], "NASA API key was rejected.")
+        self.assertEqual(len(result.discoveries), 0)
+
+    # ============================================================
+    # REGISTRY & PERSISTENCE INTEGRATION TESTS
+    # ============================================================
+
+    def test_tool_registry_includes_new_tools(self):
+        self.assertTrue(registry.has("nasa_images"))
+        self.assertTrue(registry.has("epic"))
+        self.assertTrue(registry.has("apod"))
+        self.assertTrue(registry.has("neows"))
+        self.assertTrue(registry.has("donki"))
+
+        schemas = registry.get_openai_schemas()
+        tool_names = [s["function"]["name"] for s in schemas]
+        self.assertIn("nasa_images", tool_names)
+        self.assertIn("epic", tool_names)
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_normalization_and_persistence(self, mock_search):
+        mock_search.return_value = {
+            "count": 1,
+            "items": [
+                {
+                    "nasa_id": "PIA25000",
+                    "title": "JWST Deep Field",
+                    "description": "Deepest infrared view of the universe.",
+                    "date_created": "2022-07-12T12:00:00Z",
+                    "center": "GSFC",
+                    "keywords": ["JWST", "Deep Field"],
+                    "media_type": "image",
+                    "image_url": "https://images-assets.nasa.gov/image/PIA25000/PIA25000~orig.jpg"
+                }
+            ]
+        }
+        tool = NASAImagesTool()
+        tool_result = tool.execute(self.context, query="JWST")
+
+        # ResultNormalizer
+        orch_result = OrchestratorResult(
+            success=True,
+            tool_results=[tool_result],
+            discoveries=tool_result.discoveries,
+            llm_content="Analysis of JWST deep field observation."
+        )
+        normalized = ResultNormalizer.normalize(orch_result)
+        self.assertEqual(normalized["result_type"], "nasa_images")
+        self.assertEqual(normalized["content"]["item_count"], 1)
+
+        # Persistence
+        plan = SpacePlan.objects.create(user=self.user, title="JWST Exploration", prompt="Search JWST")
+        interaction = Interaction.objects.create(
+            space_plan=plan,
+            user_prompt="Search JWST",
+            interaction_type="find_more",
+            status="pending"
+        )
+        ResultPersistenceService.persist_result(interaction, orch_result, self.user.id)
+
+        interaction.refresh_from_db()
+        self.assertEqual(interaction.status, "completed")
+        self.assertEqual(interaction.added_discoveries.count(), 1)
+        discovery = interaction.added_discoveries.first()
+        self.assertEqual(discovery.source, "nasa_images")
+        self.assertEqual(discovery.external_id, "PIA25000")
+        self.assertEqual(discovery.title, "JWST Deep Field")
+
+    @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
+    def test_epic_normalization_and_persistence(self, mock_get_imagery, mock_get_key):
+        mock_get_imagery.return_value = {
+            "date": "2026-10-07",
+            "count": 1,
+            "images": [
+                {
+                    "identifier": "20261007009999",
+                    "caption": "Earth view",
+                    "image_name": "epic_1b_20261007009999",
+                    "date": "2026-10-07 00:13:03",
+                    "image_url": "https://epic.gsfc.nasa.gov/archive/natural/2026/10/07/jpg/epic_1b_20261007009999.jpg",
+                    "centroid_coordinates": {"lat": 10.0, "lon": 20.0}
+                }
+            ]
+        }
+        tool = EPICTool()
+        tool_result = tool.execute(self.context)
+
+        # ResultNormalizer
+        orch_result = OrchestratorResult(
+            success=True,
+            tool_results=[tool_result],
+            discoveries=tool_result.discoveries,
+            llm_content="EPIC observation report."
+        )
+        normalized = ResultNormalizer.normalize(orch_result)
+        self.assertEqual(normalized["result_type"], "epic")
+        self.assertEqual(normalized["content"]["image_count"], 1)
+
+        # Persistence
+        plan = SpacePlan.objects.create(user=self.user, title="Earth Exploration", prompt="Show Earth")
+        interaction = Interaction.objects.create(
+            space_plan=plan,
+            user_prompt="Show Earth",
+            interaction_type="find_more",
+            status="pending"
+        )
+        ResultPersistenceService.persist_result(interaction, orch_result, self.user.id)
+
+        interaction.refresh_from_db()
+        self.assertEqual(interaction.status, "completed")
+        self.assertEqual(interaction.added_discoveries.count(), 1)
+        discovery = interaction.added_discoveries.first()
+        self.assertEqual(discovery.source, "epic")
+        self.assertEqual(discovery.external_id, "20261007009999")
+        self.assertEqual(discovery.title, "Earth from Deep Space (2026-10-07)")
 

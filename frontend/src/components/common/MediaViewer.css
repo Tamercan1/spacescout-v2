@@ -1,0 +1,333 @@
+/* ============================================================
+   SpaceScout V2 — Media Viewer & Lightbox Styles
+   ============================================================ */
+
+.media-viewer {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Aspect ratio containers */
+.media-viewer__frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 440px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.media-viewer__frame--video {
+  cursor: default;
+}
+
+.media-viewer__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  display: block;
+}
+
+.media-viewer__frame:hover .media-viewer__image {
+  transform: scale(1.025);
+}
+
+/* Hover overlay with zoom icon */
+.media-viewer__hover-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.5) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.media-viewer__frame:hover .media-viewer__hover-overlay {
+  opacity: 1;
+}
+
+.media-viewer__zoom-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  background: rgba(15, 20, 31, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transform: translateY(6px);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.media-viewer__frame:hover .media-viewer__zoom-badge {
+  transform: translateY(0);
+}
+
+/* Loading skeleton shimmer */
+.media-viewer__skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: mediaSkeletonShimmer 1.8s infinite ease-in-out;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 0.85rem;
+  z-index: 2;
+}
+
+@keyframes mediaSkeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Video iframe & direct video elements */
+.media-viewer__iframe,
+.media-viewer__video {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* Caption bar */
+.media-viewer__caption {
+  padding: 10px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text-2);
+  line-height: 1.45;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.media-viewer__caption-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-viewer__source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.78rem;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.media-viewer__source-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+/* Fallback Error State */
+.media-viewer__fallback {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 280px;
+  padding: 24px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.media-viewer__fallback-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red, #ef4444);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-viewer__fallback-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.media-viewer__fallback-desc {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  max-width: 360px;
+  line-height: 1.4;
+}
+
+/* ============================================================
+   LIGHTBOX MODAL
+   ============================================================ */
+.media-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(5, 7, 10, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  animation: lightboxFadeIn 0.22s ease-out forwards;
+}
+
+@keyframes lightboxFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.media-lightbox__header {
+  height: 56px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 14, 22, 0.6);
+  z-index: 2;
+}
+
+.media-lightbox__title {
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70vw;
+}
+
+.media-lightbox__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.media-lightbox__btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-decoration: none;
+}
+
+.media-lightbox__btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.media-lightbox__close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.media-lightbox__close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.media-lightbox__stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: hidden;
+  position: relative;
+  cursor: zoom-out;
+}
+
+.media-lightbox__content {
+  max-width: 92vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  cursor: default;
+  animation: lightboxImagePop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes lightboxImagePop {
+  from {
+    transform: scale(0.96);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.media-lightbox__footer {
+  padding: 12px 24px;
+  background: rgba(10, 14, 22, 0.75);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
+}

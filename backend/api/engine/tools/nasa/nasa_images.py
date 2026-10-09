@@ -1,0 +1,184 @@
+from typing import Any
+from api.engine.contracts import BaseTool, ToolResult, ToolExecutionContext, DiscoveryData, ResultType
+from api.services.nasa.nasa_services import search_nasa_images
+
+
+def format_nasa_image_facts(item: dict[str, Any]) -> dict[str, Any]:
+    """
+    Formats facts with clean, human-readable Title Case keys.
+    """
+    facts = {}
+    if item.get("center"):
+        facts["NASA Center"] = item.get("center")
+    if item.get("date_created"):
+        facts["Date Created"] = item.get("date_created").split("T")[0]
+    if item.get("nasa_id"):
+        facts["NASA ID"] = item.get("nasa_id")
+    keywords = item.get("keywords")
+    if keywords and isinstance(keywords, list):
+        facts["Keywords"] = ", ".join(str(k) for k in keywords[:4])
+    return facts
+
+
+class NASAImagesTool(BaseTool):
+    """
+    NASA Image and Video Library Search Tool.
+    Searches NASA's official media archive for missions, celestial bodies, and historical events.
+    """
+
+    @property
+    def name(self) -> str:
+        return "nasa_images"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Search NASA's official image and media archive for space missions (e.g. James Webb, Hubble, Apollo), "
+            "celestial bodies (planets, nebulae, galaxies, black holes), and historical events."
+        )
+
+    @property
+    def parameters(self) -> list:
+        return []
+
+    @property
+    def result_type(self) -> str:
+        return ResultType.NASA_IMAGES.value
+
+    def get_openai_schema(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The concise search keyword or entity to query in the NASA image archive (e.g. 'OSIRIS-REx', 'Bennu', 'James Webb', 'Apollo 11', 'Jupiter'). Use only the specific object or mission name without conversational filler words or generic category labels."
+                    },
+                    "page": {
+                        "type": "integer",
+                        "description": "Optional page number to retrieve (e.g. 1, 2, 3) to fetch subsequent results if the user asks for more."
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
+            }
+        }
+
+    def validate_arguments(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        if "query" not in arguments:
+            raise ValueError("The 'query' argument is required.")
+        query = arguments.get("query")
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("The 'query' argument must be a non-empty string.")
+        page = arguments.get("page")
+        if page is not None:
+            try:
+                page_int = int(page)
+                if page_int < 1:
+                    arguments["page"] = 1
+                else:
+                    arguments["page"] = page_int
+            except (ValueError, TypeError):
+                arguments["page"] = 1
+        return arguments
+
+    def execute(self, context: ToolExecutionContext, **kwargs) -> ToolResult:
+        query = kwargs["query"].strip()
+        page = kwargs.get("page", 1)
+
+        response = search_nasa_images(query=query, page=page)
+
+        if "error" in response:
+            return ToolResult(
+                tool_name=self.name,
+                result_type="error",
+                data={"error": response["error"]},
+                metadata={"success": False, "query": query}
+            )
+
+        items = response.get("items", [])
+        actual_query = response.get("query") or query
+        original_query = response.get("original_query")
+
+        if not items:
+            return ToolResult(
+                tool_name=self.name,
+                result_type=self.result_type,
+                data={
+                    "title": f"NASA Media Archive: {query}",
+                    "summary": f"No media archive assets found matching '{query}'.",
+                    "query": query,
+                    "item_count": 0,
+                    "items": []
+                },
+                discoveries=[],
+                metadata={"success": True, "count": 0, "query": query}
+            )
+
+        # Filter out discoveries already in the SpacePlan so follow-ups deliver fresh discoveries
+        existing_external_ids = set()
+        if context.space_plan_id:
+            try:
+                from api.models import Discovery
+                existing_external_ids = set(
+                    Discovery.objects.filter(space_plan_id=context.space_plan_id).values_list("external_id", flat=True)
+                )
+            except Exception:
+                pass
+
+        fresh_items = [it for it in items if (it.get("nasa_id") or "") not in existing_external_ids]
+        selected_items = fresh_items[:6] if fresh_items else items[:6]
+
+        discoveries = []
+        for idx, item in enumerate(selected_items):
+            media_list = []
+            if item.get("image_url"):
+                media_list.append({
+                    "url": item["image_url"],
+                    "media_type": "image",
+                    "type": "image",
+                    "is_primary": True
+                })
+
+            date_str = item.get("date_created")
+            clean_date = date_str.split("T")[0] if date_str else None
+
+            discoveries.append(DiscoveryData(
+                source=self.name,
+                external_id=item.get("nasa_id") or f"nasa_img_{actual_query}_{idx}",
+                title=item.get("title") or f"NASA Asset: {actual_query}",
+                summary=item.get("description") or "NASA imagery asset.",
+                why_interesting="",
+                date=clean_date,
+                source_url=item.get("image_url") or "https://images.nasa.gov",
+                facts=format_nasa_image_facts(item),
+                media=media_list
+            ))
+
+        summary_text = (
+            f"Retrieved {len(selected_items)} media items matching '{actual_query}'."
+            if not original_query
+            else f"Retrieved {len(selected_items)} media items matching '{actual_query}' (refined from '{original_query}')."
+        )
+
+        return ToolResult(
+            tool_name=self.name,
+            result_type=self.result_type,
+            data={
+                "title": f"NASA Media Archive: {actual_query}",
+                "summary": summary_text,
+                "query": actual_query,
+                "item_count": len(items),
+                "items": selected_items
+            },
+            discoveries=discoveries,
+            metadata={
+                "success": True,
+                "count": len(items),
+                "query": actual_query,
+                "original_query": original_query,
+                "returned_count": len(selected_items)
+            }
+        )

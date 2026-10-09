@@ -1,5 +1,6 @@
 import type { Discovery } from "../../types/planner";
 import { FileText, ScrollText, Rocket, List } from "lucide-react";
+import MediaViewer from "../common/MediaViewer";
 import "../../styles/DiscoveryModal.css";
 
 interface DiscoveryModalProp {
@@ -26,12 +27,13 @@ function DiscoveryModal({discovery, setSelectedCard}: DiscoveryModalProp) {
             <div className="detail-fields">
 
                 {discovery.media && discovery.media.length > 0 && (
-                    discovery.media[0].media_type === "image"
-                    ? <img src={discovery.media[0].url} alt={discovery.title} />
-                    : <video controls>
-                        <source src={discovery.media[0].url} type="video/mp4" />
-                        Your browser does not support the video tag.
-                    </video>
+                    <MediaViewer
+                        url={discovery.media[0].url}
+                        mediaType={discovery.media[0].media_type}
+                        title={discovery.title}
+                        caption={discovery.media[0].caption || discovery.title}
+                        sourceUrl={discovery.source_url}
+                    />
                 )}
 
                 <div className="discovery-header">

@@ -92,7 +92,11 @@ registry = ToolRegistry()
 from .tools.nasa.apod import APODTool
 from .tools.nasa.neows import NeoWsTool
 from .tools.nasa.donki import DonkiTool
+from .tools.nasa.nasa_images import NASAImagesTool
+from .tools.nasa.epic import EPICTool
 
 registry.register(APODTool())
 registry.register(NeoWsTool())
 registry.register(DonkiTool())
+registry.register(NASAImagesTool())
+registry.register(EPICTool())

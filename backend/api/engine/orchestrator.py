@@ -38,10 +38,16 @@ class GenericOrchestrator(BaseOrchestrator):
             "IMPORTANT: When calling tools, you MUST use the native JSON tool calling format. DO NOT output tool calls as XML or text (e.g., no <dots_function_call> or <function_call> tags). "
             f"Summary: {context.space_plan_summary}\n\n"
             "TOOL CALLING AND FAILURE GUIDELINES:\n"
-            "1. Only invoke tools that directly fulfill the user's explicit request. For example, if the user asks for solar flares, only invoke 'donki'. Never call unrelated tools like 'neows' or 'apod'.\n"
+            "1. Only invoke tools that directly fulfill the user's explicit request:\n"
+            "   - 'apod': for Astronomy Picture of the Day. Omit the 'date' argument unless the user explicitly requested a specific historical date.\n"
+            "   - 'neows': for near-Earth asteroid tracking, close approaches, and hazard metrics.\n"
+            "   - 'donki': for solar flares and space weather activity.\n"
+            "   - 'nasa_images': for general space exploration, astronomical missions (James Webb, Hubble, Apollo, OSIRIS-REx), deep space, planets, nebulae, galaxies, and historical NASA media archives. Pass a single concise subject or mission keyword in 'query' (e.g. 'OSIRIS-REx', 'Bennu', 'James Webb', 'Jupiter'). Do NOT combine conversational phrases or multiple category labels. When the user asks for more images, advance the 'page' parameter or select a specific related entity.\n"
+            "   - 'epic': for full-disc Earth imagery captured from deep space (DSCOVR spacecraft at the L1 Lagrange point). Omit the 'date' argument unless the user explicitly requested a specific date.\n"
             "2. If a tool fails or returns an error, do NOT repeatedly invoke the same tool with identical arguments. Report the error directly and honestly to the user.\n"
-            "3. Never silently replace a failed tool's results with unrelated discoveries (e.g. do not show asteroids when a solar flare request fails). Never invent or fabricate discoveries.\n"
-            "4. If the requested data cannot be retrieved due to service unavailability or network errors, inform the user clearly."
+            "3. Never silently replace a failed tool's results with unrelated discoveries (e.g. do not show asteroids when an Earth imagery request fails). Never invent or fabricate discoveries.\n"
+            "4. If the requested data cannot be retrieved due to service unavailability or date gaps, inform the user clearly.\n"
+            "5. Response formatting: Always write your final response in clean, engaging, professional Markdown. NEVER output raw pipe-delimited internal syntax (such as 'Result Type: ... | Title: ... | Summary: ... | Synthesis: ...')."
         )
         messages = [
             LLMMessage(role="system", content=system_content)

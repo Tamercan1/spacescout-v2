@@ -81,6 +81,8 @@ class ResultType(str, Enum):
     NEOWS = "neows"
     DONKI = "donki"
     ANALYSIS = "analysis"
+    NASA_IMAGES = "nasa_images"
+    EPIC = "epic"
 
 
 # ============================================================

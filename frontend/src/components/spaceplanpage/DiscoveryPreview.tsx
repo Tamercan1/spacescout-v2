@@ -9,10 +9,12 @@ interface DiscoveryProp {
 }
 
 function DiscoveryPreview({discovery, setSelectedDiscoveryCard}: DiscoveryProp) {
+    const effectiveType = discovery.source || discovery.type || "general";
+    const label = typeMap[effectiveType] || typeMap[discovery.type] || "Discovery";
 
     return (
         <div 
-            className={`discovery-preview ${discovery.type}`}
+            className={`discovery-preview ${effectiveType}`}
             key={discovery.id}
             onClick={() => {
                 if (window.getSelection()?.toString()) return
@@ -20,14 +22,14 @@ function DiscoveryPreview({discovery, setSelectedDiscoveryCard}: DiscoveryProp) 
             }}
         >   
             <div className="date-type">
-                <span className={`strong-${discovery.type}`}>{typeMap[discovery.type]}</span>
+                <span className={`strong-${effectiveType}`}>{label}</span>
                 <span className="soft"> 
                     {formatToShortDate(discovery.date)} 
                 </span>
             </div>
             <h3>{discovery.title}</h3>
-            <p className="soft">{discovery.summary.slice(0, 110) + "..."}</p>
-            <button><strong className={`strong-${discovery.type}`}>View details</strong></button>
+            <p className="soft">{discovery.summary ? discovery.summary.slice(0, 110) + "..." : ""}</p>
+            <button><strong className={`strong-${effectiveType}`}>View details</strong></button>
         </div>
     )
 }

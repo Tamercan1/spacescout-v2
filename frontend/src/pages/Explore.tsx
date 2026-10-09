@@ -4,6 +4,7 @@ import { Compass, Layers, MessageSquare, Loader2 } from 'lucide-react';
 import { getSpacePlan, getInteractions, createInteraction } from '../api/planner';
 import type { SpacePlan, Interaction, Discovery, InteractionType } from '../types/planner';
 import InteractionStream from '../components/explore/InteractionStream';
+import MediaViewer from '../components/common/MediaViewer';
 
 export default function Explore() {
     const { id } = useParams<{ id: string }>();
@@ -277,19 +278,66 @@ export default function Explore() {
 function DiscoveryCard({ discovery }: { discovery: Discovery }) {
     const [expanded, setExpanded] = useState(false);
 
-    const typeClass = discovery.type === 'neo' || discovery.source === 'neows'
-        ? 'type-neo'
-        : discovery.source === 'apod'
-        ? 'type-image'
-        : '';
+    const isNeo = discovery.type === 'neo' || discovery.source === 'neows';
+    const isApod = discovery.source === 'apod' || discovery.type === 'apod';
+    const isDonki = discovery.source === 'donki' || discovery.type === 'solar_flare';
+    const isNasaImages = discovery.source === 'nasa_images';
+    const isEpic = discovery.source === 'epic';
 
-    const typeLabel = discovery.source === 'neows'
+    const typeClass = isNeo
+        ? 'type-neo'
+        : isApod
+        ? 'type-apod'
+        : isDonki
+        ? 'type-donki'
+        : isNasaImages
+        ? 'type-nasa-images'
+        : isEpic
+        ? 'type-epic'
+        : 'type-general';
+
+    const typeModifier = isNeo
+        ? 'neo'
+        : isApod
+        ? 'apod'
+        : isDonki
+        ? 'donki'
+        : isNasaImages
+        ? 'nasa-images'
+        : isEpic
+        ? 'epic'
+        : 'general';
+
+    const typeLabel = isNeo
         ? 'Near-Earth Object'
-        : discovery.source === 'apod'
+        : isApod
         ? 'Astronomy Picture'
-        : discovery.source === 'donki'
+        : isDonki
         ? 'Space Weather'
+        : isNasaImages
+        ? 'NASA Media Archive'
+        : isEpic
+        ? 'Earth from DSCOVR'
         : discovery.type || 'Discovery';
+
+    const renderTypeIcon = () => {
+        if (isNeo) {
+            return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
+        }
+        if (isApod) {
+            return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>;
+        }
+        if (isDonki) {
+            return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>;
+        }
+        if (isNasaImages) {
+            return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>;
+        }
+        if (isEpic) {
+            return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg>;
+        }
+        return null;
+    };
 
     const primaryMedia = discovery.media?.find(m => m.is_primary) || discovery.media?.[0];
 
@@ -297,12 +345,8 @@ function DiscoveryCard({ discovery }: { discovery: Discovery }) {
         <div className={`card ${typeClass} ${expanded ? 'expanded' : ''}`}>
             <div className="card__head" onClick={() => setExpanded(!expanded)}>
                 <div className="card__type-row">
-                    <span className={`card__type ${discovery.source === 'neows' ? 'neo' : discovery.source === 'apod' ? 'image' : ''}`}>
-                        {discovery.source === 'neows' ? (
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                        ) : discovery.source === 'apod' ? (
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-                        ) : null}
+                    <span className={`card__type ${typeModifier}`}>
+                        {renderTypeIcon()}
                         {typeLabel}
                     </span>
                     {discovery.date && (
@@ -321,16 +365,13 @@ function DiscoveryCard({ discovery }: { discovery: Discovery }) {
             <div className="card__body">
                 <div className="card__body-inner">
                     {primaryMedia && (
-                        <div className="card__media">
-                            {primaryMedia.media_type === 'image' ? (
-                                <img src={primaryMedia.url} alt={primaryMedia.caption || discovery.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            ) : (
-                                <video src={primaryMedia.url} controls style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            )}
-                            {primaryMedia.caption && (
-                                <div className="card__media-caption">{primaryMedia.caption}</div>
-                            )}
-                        </div>
+                        <MediaViewer
+                            url={primaryMedia.url}
+                            mediaType={primaryMedia.media_type}
+                            title={discovery.title}
+                            caption={primaryMedia.caption || discovery.title}
+                            sourceUrl={discovery.source_url}
+                        />
                     )}
 
                     {discovery.facts && typeof discovery.facts === 'object' && Object.keys(discovery.facts).length > 0 && (

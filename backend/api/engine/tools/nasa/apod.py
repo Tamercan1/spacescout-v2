@@ -65,9 +65,14 @@ class APODTool(BaseTool):
         
         api_key = get_provider_key(context.user_id, "nasa") if context.user_id else None
         
-        # NASA API call
         response = get_astronomy_picture(date=date, api_key=api_key)
-        
+
+        # Graceful fallback: If a requested date fails (e.g. status 400 future date error), fetch the latest available picture
+        if "error" in response and date:
+            fallback_response = get_astronomy_picture(date=None, api_key=api_key)
+            if "error" not in fallback_response:
+                response = fallback_response
+
         if "error" in response:
             return ToolResult(
                 tool_name=self.name,
@@ -87,7 +92,9 @@ class APODTool(BaseTool):
             facts=format_apod_facts(response),
             media=[{
                 "url": response.get("image_url", ""),
-                "type": response.get("media_type", "image")
+                "media_type": response.get("media_type", "image"),
+                "type": response.get("media_type", "image"),
+                "is_primary": True
             }]
         )
         

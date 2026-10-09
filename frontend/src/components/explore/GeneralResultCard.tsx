@@ -4,6 +4,8 @@ import { Sparkles } from 'lucide-react';
 
 interface GeneralResultCardProps {
     result: AnalysisResult | GenericResult;
+    addedCount?: number;
+    referencedCount?: number;
     discoveryCount?: number;
 }
 
@@ -11,11 +13,14 @@ interface GeneralResultCardProps {
  * Renders an analysis-style interaction result or a generic fallback.
  * Supports a title and streamlined markdown content, with optional discovery indicators.
  */
-export default function GeneralResultCard({ result, discoveryCount }: GeneralResultCardProps) {
+export default function GeneralResultCard({ result, addedCount, referencedCount, discoveryCount }: GeneralResultCardProps) {
     const failures = result.metadata?.tool_failures as Array<{ tool: string; error: string }> | undefined;
     
     let title = "Response";
     let renderContent: React.ReactNode;
+
+    const effectiveAddedCount = addedCount ?? discoveryCount ?? 0;
+    const effectiveReferencedCount = referencedCount ?? 0;
 
     if (result.result_type === "analysis") {
         const analysis = result as AnalysisResult;
@@ -57,15 +62,23 @@ export default function GeneralResultCard({ result, discoveryCount }: GeneralRes
     }
 
     return (
-        <div className="result-card">
+        <div className="result-card result-card--analysis">
+            <div className="result-card__badge result-card__badge--analysis">
+                <Sparkles size={11} />
+                <span>AI Analysis</span>
+            </div>
             <div className="result-card__header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
                 <div className="result-card__title" style={{ margin: 0 }}>{title}</div>
-                {discoveryCount !== undefined && discoveryCount > 0 && (
-                    <div className="result-card__discovery-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '4px 10px', borderRadius: '12px', background: 'rgba(56, 189, 248, 0.12)', color: 'var(--primary)', border: '1px solid rgba(56, 189, 248, 0.25)', fontWeight: 500 }}>
+                {effectiveAddedCount > 0 ? (
+                    <div className="result-card__discovery-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '4px 10px', borderRadius: '12px', background: 'rgba(56, 189, 248, 0.12)', color: 'var(--blue, #38bdf8)', border: '1px solid rgba(56, 189, 248, 0.25)', fontWeight: 500 }}>
                         <Sparkles size={13} />
-                        <span>Added {discoveryCount} new discover{discoveryCount === 1 ? 'y' : 'ies'}</span>
+                        <span>Added {effectiveAddedCount} new discover{effectiveAddedCount === 1 ? 'y' : 'ies'}</span>
                     </div>
-                )}
+                ) : effectiveReferencedCount > 0 ? (
+                    <div className="result-card__discovery-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '4px 10px', borderRadius: '12px', background: 'rgba(148, 163, 184, 0.12)', color: 'var(--text-2)', border: '1px solid var(--border)', fontWeight: 500 }}>
+                        <span>Referenced {effectiveReferencedCount} discover{effectiveReferencedCount === 1 ? 'y' : 'ies'}</span>
+                    </div>
+                ) : null}
             </div>
             
             {failures && failures.length > 0 && (

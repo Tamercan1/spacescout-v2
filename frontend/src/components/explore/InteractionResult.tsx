@@ -6,12 +6,16 @@ import type {
     ApodResult,
     NeowsResult,
     DonkiResult,
+    NasaImagesResult,
+    EpicResult,
     GenericResult
 } from '../../types/planner';
 import GeneralResultCard from './GeneralResultCard';
 import ApodResultCard from './ApodResultCard';
 import NeowsResultCard from './NeowsResultCard';
 import DonkiResultCard from './DonkiResultCard';
+import NasaImagesResultCard from './NasaImagesResultCard';
+import EpicResultCard from './EpicResultCard';
 import { Loader2 } from 'lucide-react';
 
 // Central registry for dynamic result cards
@@ -20,11 +24,15 @@ const CardRegistry: {
     apod: React.FC<{ result: ApodResult }>;
     neows: React.FC<{ result: NeowsResult }>;
     donki: React.FC<{ result: DonkiResult }>;
+    nasa_images: React.FC<{ result: NasaImagesResult }>;
+    epic: React.FC<{ result: EpicResult }>;
 } = {
     analysis: GeneralResultCard,
     apod: ApodResultCard,
     neows: NeowsResultCard,
     donki: DonkiResultCard,
+    nasa_images: NasaImagesResultCard,
+    epic: EpicResultCard,
 };
 
 interface InteractionResultProps {
@@ -63,13 +71,14 @@ export default function InteractionResult({ interaction }: InteractionResultProp
     const typedResponse = response as InteractionResponse;
 
     if (typedResponse && 'result_type' in typedResponse) {
-        const discoveryCount = interaction.added_discoveries?.length || (typedResponse as any)?.discoveries?.length || 0;
+        const addedCount = interaction.added_discoveries?.length ?? 0;
+        const targetCount = interaction.target_discoveries?.length ?? (typedResponse as any)?.target_discoveries?.length ?? 0;
         const synthesis = (typedResponse.metadata?.synthesis as string | undefined)?.trim();
 
-        // In follow-up interactions: if conversational synthesis exists and discoveries were created,
+        // In follow-up interactions: if conversational synthesis exists and new discoveries were created,
         // render the streamlined AI response card with the discovery badge instead of duplicating
         // full-sized tool cards in the stream (the full discovery card is already visible in the feed).
-        if (synthesis && discoveryCount > 0 && typedResponse.result_type !== "analysis") {
+        if (synthesis && addedCount > 0 && typedResponse.result_type !== "analysis") {
             const syntheticAnalysis: AnalysisResult = {
                 result_type: "analysis",
                 content: {
@@ -85,11 +94,11 @@ export default function InteractionResult({ interaction }: InteractionResultProp
                 discoveries: (typedResponse as any)?.discoveries || [],
                 metadata: typedResponse.metadata || {}
             };
-            return <GeneralResultCard result={syntheticAnalysis} discoveryCount={discoveryCount} />;
+            return <GeneralResultCard result={syntheticAnalysis} addedCount={addedCount} referencedCount={targetCount} />;
         }
 
         if (typedResponse.result_type === "analysis") {
-            return <GeneralResultCard result={typedResponse as AnalysisResult} discoveryCount={discoveryCount} />;
+            return <GeneralResultCard result={typedResponse as AnalysisResult} addedCount={addedCount} referencedCount={targetCount} />;
         }
 
         const resultType = typedResponse.result_type as keyof typeof CardRegistry;
@@ -101,10 +110,7 @@ export default function InteractionResult({ interaction }: InteractionResultProp
             return <Component result={typedResponse} />;
         }
         
-        // Fallback for unknown result types (Phase 5.6 requirements)
-        // Wraps the unknown content into a format GeneralResultCard can display
-        // Preserves the original result_type by casting to GenericResult
-        return <GeneralResultCard result={typedResponse as GenericResult} discoveryCount={discoveryCount} />;
+        return <GeneralResultCard result={typedResponse as GenericResult} addedCount={addedCount} referencedCount={targetCount} />;
     }
 
     // Ultimate fallback for completely unrecognized or empty responses

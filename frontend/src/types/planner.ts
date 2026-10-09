@@ -130,6 +130,54 @@ export interface DonkiResult {
     metadata?: Record<string, unknown>;
 }
 
+export interface NasaImageItem {
+    nasa_id?: string;
+    title: string;
+    description?: string;
+    date_created?: string;
+    center?: string;
+    media_type?: string;
+    image_url?: string;
+}
+
+export interface NasaImagesResult {
+    result_type: "nasa_images";
+    content: {
+        title: string;
+        summary: string;
+        query: string;
+        item_count: number;
+        items: NasaImageItem[];
+    };
+    discoveries: number[];
+    metadata?: Record<string, unknown>;
+}
+
+export interface EpicImageItem {
+    identifier?: string;
+    caption?: string;
+    image_name?: string;
+    date: string;
+    image_url?: string;
+    centroid_coordinates?: {
+        lat?: number;
+        lon?: number;
+    } | null;
+}
+
+export interface EpicResult {
+    result_type: "epic";
+    content: {
+        title: string;
+        summary: string;
+        date: string;
+        image_count: number;
+        images: EpicImageItem[];
+    };
+    discoveries: number[];
+    metadata?: Record<string, unknown>;
+}
+
 export interface GenericResult {
     result_type: string;
     content: Record<string, unknown>;
@@ -143,5 +191,7 @@ export type InteractionResponse =
     | ApodResult 
     | NeowsResult 
     | DonkiResult 
+    | NasaImagesResult
+    | EpicResult
     | GenericResult;
 

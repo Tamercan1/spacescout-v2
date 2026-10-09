@@ -96,13 +96,23 @@ class ResultPersistenceService:
                     # Handle Media only on creation to avoid duplicate media attachments
                     if d_data.media and created:
                         for idx, m in enumerate(d_data.media):
+                            raw_type = m.get("media_type") or m.get("type")
+                            raw_url = (m.get("url") or "").lower()
+                            if not raw_type or raw_type == "other":
+                                if any(raw_url.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"]):
+                                    raw_type = "image"
+                                elif any(k in raw_url for k in ["youtube.com", "youtu.be", "vimeo.com", ".mp4", ".webm", ".mov"]):
+                                    raw_type = "video"
+                                else:
+                                    raw_type = "image" if raw_url else "other"
+
                             DiscoveryMedia.objects.create(
                                 discovery=discovery,
-                                media_type=m.get("media_type", "other"),
+                                media_type=raw_type,
                                 url=m.get("url", ""),
                                 thumbnail_url=m.get("thumbnail_url", ""),
                                 caption=m.get("caption", ""),
-                                is_primary=m.get("is_primary", False),
+                                is_primary=m.get("is_primary", idx == 0),
                                 order=m.get("order", idx)
                             )
                     
