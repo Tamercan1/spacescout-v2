@@ -326,3 +326,148 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("function", schemas[0])
         self.assertEqual(schemas[0]["function"]["name"], "fake_tool")
 
+    def test_repeated_identical_failed_tool_calls_blocked(self):
+        fake_tool = FakeTool()
+        fake_tool.execute_mock.return_value = ToolResult(
+            tool_name="fake_tool",
+            result_type="error",
+            data={"error": "Network Error: Could not reach the NASA API."},
+            metadata={"success": False}
+        )
+        self.registry.register(fake_tool)
+
+        # LLM attempts to call the exact same failing tool with identical arguments twice
+        self.provider.generate.side_effect = [
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="fake_tool", arguments={"arg1": "same_target"})]
+            ),
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="fake_tool", arguments={"arg1": "same_target"})]
+            ),
+            LLMResponse(content="I am unable to retrieve the requested data.")
+        ]
+
+        result = self.orchestrator.execute(self.context)
+
+        self.assertTrue(result.success)
+        # Verify the underlying execute method was ONLY called once, not twice
+        self.assertEqual(fake_tool.execute_mock.call_count, 1)
+
+        # Verify the second tool message informed the model that identical retries are blocked
+        third_call_messages = self.provider.generate.call_args_list[2][1]["messages"]
+        tool_messages = [m for m in third_call_messages if m.role == "tool"]
+        self.assertEqual(len(tool_messages), 2)
+        self.assertIn("already failed with these arguments", tool_messages[1].content)
+
+    def test_failed_tool_preserves_explicit_partial_failures_in_normalizer(self):
+        from api.engine.result_normalizer import ResultNormalizer
+        fake_tool = FakeTool()
+        fake_tool.execute_mock.return_value = ToolResult(
+            tool_name="fake_tool",
+            result_type="error",
+            data={"error": "Connection timed out"},
+            metadata={"success": False}
+        )
+        self.registry.register(fake_tool)
+
+        self.provider.generate.side_effect = [
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="fake_tool", arguments={"arg1": "flares"})]
+            ),
+            LLMResponse(content="Service is down.")
+        ]
+
+        result = self.orchestrator.execute(self.context)
+
+        # Check that result has 0 discoveries and preserved error
+        self.assertEqual(len(result.discoveries), 0)
+        self.assertEqual(len(result.tool_results), 1)
+        self.assertEqual(result.tool_results[0].result_type, "error")
+
+        normalized = ResultNormalizer.normalize(result)
+        self.assertEqual(normalized["result_type"], "analysis")
+        self.assertEqual(len(normalized["discoveries"]), 0)
+        self.assertIn("tool_failures", normalized["metadata"])
+        self.assertEqual(normalized["metadata"]["tool_failures"][0]["tool"], "fake_tool")
+        self.assertEqual(normalized["metadata"]["tool_failures"][0]["error"], "Connection timed out")
+
+    def test_post_tool_llm_enrichment_populates_why_interesting(self):
+        from api.engine.contracts import DiscoveryData
+        fake_tool = FakeTool()
+        disc = DiscoveryData(
+            source="fake_tool",
+            external_id="disc_1",
+            title="Discovery One",
+            summary="Discovered item",
+            why_interesting=""
+        )
+        fake_tool.execute_mock.return_value = ToolResult(
+            tool_name="fake_tool",
+            result_type="custom",
+            data={"status": "ok"},
+            discoveries=[disc],
+            metadata={"success": True}
+        )
+        self.registry.register(fake_tool)
+
+        # First call: tool call
+        # Second call: synthesis response
+        # Third call: enrichment pass
+        self.provider.generate.side_effect = [
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="fake_tool", arguments={"arg1": "value"})]
+            ),
+            LLMResponse(content="Tool execution finished."),
+            LLMResponse(content='{"disc_1": "A rare astronomical alignment that reveals unprecedented stellar activity."}')
+        ]
+
+        result = self.orchestrator.execute(self.context)
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.discoveries), 1)
+        self.assertEqual(
+            result.discoveries[0].why_interesting,
+            "A rare astronomical alignment that reveals unprecedented stellar activity."
+        )
+        self.assertEqual(self.provider.generate.call_count, 3)
+
+    def test_post_tool_llm_enrichment_failure_strict_policy_leaves_blank(self):
+        from api.engine.contracts import DiscoveryData
+        fake_tool = FakeTool()
+        disc = DiscoveryData(
+            source="fake_tool",
+            external_id="disc_2",
+            title="Discovery Two",
+            summary="Discovered item",
+            why_interesting=""
+        )
+        fake_tool.execute_mock.return_value = ToolResult(
+            tool_name="fake_tool",
+            result_type="custom",
+            data={"status": "ok"},
+            discoveries=[disc],
+            metadata={"success": True}
+        )
+        self.registry.register(fake_tool)
+
+        # First call: tool call
+        # Second call: synthesis response
+        # Third call: enrichment pass returns malformed response
+        self.provider.generate.side_effect = [
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="fake_tool", arguments={"arg1": "value"})]
+            ),
+            LLMResponse(content="Tool execution finished."),
+            LLMResponse(content="invalid non-json output")
+        ]
+
+        result = self.orchestrator.execute(self.context)
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.discoveries), 1)
+        # Strict LLM-only policy: remains empty string if LLM fails
+        self.assertEqual(result.discoveries[0].why_interesting, "")
+

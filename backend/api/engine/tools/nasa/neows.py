@@ -2,6 +2,50 @@ from typing import Any
 from api.engine.contracts import BaseTool, ToolResult, ToolExecutionContext, DiscoveryData, ResultType
 from api.services.nasa.nasa_services import search_near_earth_objects
 from api.services.credentials import get_provider_key
+def format_neows_facts(obj: dict[str, Any]) -> dict[str, Any]:
+    """
+    Formats facts with clean, human-readable Title Case keys and friendly values.
+    """
+    is_hazardous = obj.get("is_potentially_hazardous", False)
+    miss_km_raw = obj.get("miss_distance_km")
+    diam = obj.get("estimated_diameter_km") or {}
+
+    miss_km = None
+    try:
+        miss_km = float(miss_km_raw) if miss_km_raw is not None else None
+    except (ValueError, TypeError):
+        pass
+
+    dist_str = ""
+    if miss_km is not None:
+        ld = miss_km / 384400.0
+        if miss_km >= 1_000_000:
+            dist_str = f"{miss_km / 1_000_000.0:.2f} million km ({ld:.1f} LD)"
+        else:
+            dist_str = f"{miss_km:,.0f} km ({ld:.1f} LD)"
+    else:
+        dist_str = str(miss_km_raw or "Unknown")
+
+    size_str = "Unknown"
+    min_km = diam.get("min") if isinstance(diam, dict) else None
+    max_km = diam.get("max") if isinstance(diam, dict) else None
+    if min_km is not None and max_km is not None:
+        try:
+            min_m = float(min_km) * 1000
+            max_m = float(max_km) * 1000
+            if max_m >= 1000:
+                size_str = f"{float(min_km):.2f} – {float(max_km):.2f} km"
+            else:
+                size_str = f"{min_m:.0f}m – {max_m:.0f}m"
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "Potentially Hazardous": "Yes" if is_hazardous else "No",
+        "Closest Approach Distance": dist_str,
+        "Estimated Diameter": size_str,
+    }
+
 
 class NeoWsTool(BaseTool):
     """
@@ -97,14 +141,10 @@ class NeoWsTool(BaseTool):
                 external_id=obj.get("id"),
                 title=f"Asteroid {obj.get('name')}",
                 summary=f"Asteroid approach on {obj.get('date')}",
+                why_interesting="",
                 date=obj.get("date"),
                 source_url=obj.get("nasa_jpl_url", ""),
-                facts={
-                    "miss_distance_km": obj.get("miss_distance_km"),
-                    "is_potentially_hazardous": obj.get("is_potentially_hazardous"),
-                    "estimated_diameter_min_km": obj.get("estimated_diameter_km", {}).get("min"),
-                    "estimated_diameter_max_km": obj.get("estimated_diameter_km", {}).get("max")
-                }
+                facts=format_neows_facts(obj)
             )
             discoveries.append(discovery)
             

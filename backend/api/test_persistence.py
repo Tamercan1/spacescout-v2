@@ -60,9 +60,33 @@ class TestPersistenceBoundary(TestCase):
         
         normalized = ResultNormalizer.normalize(result)
         self.assertEqual(normalized["result_type"], "analysis")
-        self.assertEqual(len(normalized["content"]["sections"]), 3)
-        self.assertEqual(normalized["content"]["sections"][2]["heading"], "Synthesis")
-        self.assertEqual(normalized["content"]["sections"][2]["content"], "Synthesized response")
+        self.assertEqual(len(normalized["content"]["sections"]), 1)
+        self.assertEqual(normalized["content"]["sections"][0]["heading"], "Response")
+        self.assertEqual(normalized["content"]["sections"][0]["content"], "Synthesized response")
+        self.assertEqual(normalized["content"]["title"], "Analysis")
+        self.assertEqual(normalized["metadata"]["tool_count"], 2)
+
+    def test_normalizer_multiple_tools_without_synthesis_fallback(self):
+        result = OrchestratorResult(
+            success=True,
+            tool_results=[
+                ToolResult(
+                    tool_name="apod",
+                    result_type=ResultType.APOD.value,
+                    data={"title": "A Star", "summary": "APOD summary"}
+                ),
+                ToolResult(
+                    tool_name="neows",
+                    result_type=ResultType.NEOWS.value,
+                    data={"title": "Asteroid 1", "summary": "NeoWs summary"}
+                )
+            ]
+        )
+        normalized = ResultNormalizer.normalize(result)
+        self.assertEqual(normalized["result_type"], "analysis")
+        self.assertEqual(len(normalized["content"]["sections"]), 2)
+        self.assertEqual(normalized["content"]["sections"][0]["heading"], "A Star")
+        self.assertEqual(normalized["content"]["sections"][1]["heading"], "Asteroid 1")
         self.assertEqual(normalized["metadata"]["tool_count"], 2)
         
     def test_normalizer_partial_failure(self):

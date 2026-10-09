@@ -9,18 +9,28 @@ API_KEY = os.getenv("NASA_API_KEY")
 
 NASA_APOD_URL = "https://api.nasa.gov/planetary/apod"
 NASA_NEO_URL = "https://api.nasa.gov/neo/rest/v1/feed"
-NASA_FLR_URL = "https://api.nasa.gov/DONKI/FLR"
+NASA_FLR_URL = "https://ccmc.gsfc.nasa.gov/DONKI-API/get/FLR"
 
 
 def get(url, params, timeout=15):
     try:
-        response = httpx.get(url, params=params, timeout=timeout)
+        response = httpx.get(url, params=params, timeout=timeout, follow_redirects=True)
         response.raise_for_status()
+
+        content_type = response.headers.get("content-type", "")
+        if "json" not in content_type and not response.text.strip().startswith(("{", "[")):
+            if str(response.url) != url:
+                return None, f"NASA API endpoint redirected unexpectedly to {response.url}"
+            return None, "NASA API returned a non-JSON response."
+
         return response.json(), None
 
     except httpx.HTTPStatusError as err:
         status = err.response.status_code
-        if status == 429:
+        if status in [301, 302, 307, 308]:
+            loc = err.response.headers.get("Location", "")
+            return None, f"NASA API returned redirect (status {status}) to {loc}."
+        elif status == 429:
             message = "NASA API rate limit reached. Try again later."
         elif status in [401, 403]:
             message = "NASA API key was rejected. Check NASA_API_KEY."
@@ -110,10 +120,11 @@ def search_near_earth_objects(start_date, end_date, api_key=None):
 # GET SOLAR FLARES USING NASA'S DONKI FLR
 def get_solar_flares(start_date, end_date, api_key=None):
     qparams = {
-        "api_key": api_key or API_KEY,
-        "start_date": start_date,
-        "end_date": end_date
+        "startDate": start_date,
+        "endDate": end_date,
     }
+    if api_key or API_KEY:
+        qparams["api_key"] = api_key or API_KEY
 
     data, error = get(NASA_FLR_URL, qparams)
 
@@ -137,9 +148,9 @@ def get_solar_flares(start_date, end_date, api_key=None):
                 "note": flare.get("note", ""),
                 "url": flare["link"]
             })
-    except KeyError:
+    except (KeyError, TypeError):
         return {
-            "error": "Unexpected NASA API response."
+            "error": "Unexpected NASA API response format."
         }
 
     return {

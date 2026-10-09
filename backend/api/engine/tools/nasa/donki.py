@@ -2,6 +2,17 @@ from typing import Any
 from api.engine.contracts import BaseTool, ToolResult, ToolExecutionContext, DiscoveryData, ResultType
 from api.services.nasa.nasa_services import get_solar_flares
 from api.services.credentials import get_provider_key
+def format_donki_facts(flare: dict[str, Any]) -> dict[str, Any]:
+    """
+    Formats facts with clean, human-readable Title Case keys and friendly values.
+    """
+    return {
+        "Flare Classification": flare.get("class") or "Unknown",
+        "Peak Time": flare.get("peak_time") or "N/A",
+        "Active Region": str(flare.get("active_region")) if flare.get("active_region") else "None detected",
+        "Source Location": flare.get("source_location") or "N/A",
+    }
+
 
 class DonkiTool(BaseTool):
     """
@@ -93,16 +104,10 @@ class DonkiTool(BaseTool):
                 external_id=flare.get("id"),
                 title=f"Solar Flare: Class {flare.get('class')}",
                 summary=flare.get("note", f"A {flare.get('class')} class solar flare event."),
+                why_interesting="",
                 date=date_str,
                 source_url=flare.get("url", ""),
-                facts={
-                    "class": flare.get("class"),
-                    "start_time": flare.get("start_time"),
-                    "peak_time": flare.get("peak_time"),
-                    "end_time": flare.get("end_time"),
-                    "active_region": flare.get("active_region"),
-                    "source_location": flare.get("source_location")
-                }
+                facts=format_donki_facts(flare)
             )
             discoveries.append(discovery)
             

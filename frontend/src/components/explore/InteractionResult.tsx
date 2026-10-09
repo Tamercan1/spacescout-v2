@@ -63,6 +63,35 @@ export default function InteractionResult({ interaction }: InteractionResultProp
     const typedResponse = response as InteractionResponse;
 
     if (typedResponse && 'result_type' in typedResponse) {
+        const discoveryCount = interaction.added_discoveries?.length || (typedResponse as any)?.discoveries?.length || 0;
+        const synthesis = (typedResponse.metadata?.synthesis as string | undefined)?.trim();
+
+        // In follow-up interactions: if conversational synthesis exists and discoveries were created,
+        // render the streamlined AI response card with the discovery badge instead of duplicating
+        // full-sized tool cards in the stream (the full discovery card is already visible in the feed).
+        if (synthesis && discoveryCount > 0 && typedResponse.result_type !== "analysis") {
+            const syntheticAnalysis: AnalysisResult = {
+                result_type: "analysis",
+                content: {
+                    title: "Response",
+                    summary: "AI Response",
+                    sections: [
+                        {
+                            heading: "Response",
+                            content: synthesis
+                        }
+                    ]
+                },
+                discoveries: (typedResponse as any)?.discoveries || [],
+                metadata: typedResponse.metadata || {}
+            };
+            return <GeneralResultCard result={syntheticAnalysis} discoveryCount={discoveryCount} />;
+        }
+
+        if (typedResponse.result_type === "analysis") {
+            return <GeneralResultCard result={typedResponse as AnalysisResult} discoveryCount={discoveryCount} />;
+        }
+
         const resultType = typedResponse.result_type as keyof typeof CardRegistry;
         const CardComponent = CardRegistry[resultType];
         
@@ -75,7 +104,7 @@ export default function InteractionResult({ interaction }: InteractionResultProp
         // Fallback for unknown result types (Phase 5.6 requirements)
         // Wraps the unknown content into a format GeneralResultCard can display
         // Preserves the original result_type by casting to GenericResult
-        return <GeneralResultCard result={typedResponse as GenericResult} />;
+        return <GeneralResultCard result={typedResponse as GenericResult} discoveryCount={discoveryCount} />;
     }
 
     // Ultimate fallback for completely unrecognized or empty responses

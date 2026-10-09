@@ -2,6 +2,18 @@ from typing import Any
 from api.engine.contracts import BaseTool, ToolResult, ToolExecutionContext, DiscoveryData, ResultType
 from api.services.nasa.nasa_services import get_astronomy_picture
 from api.services.credentials import get_provider_key
+def format_apod_facts(response: dict[str, Any]) -> dict[str, Any]:
+    """
+    Formats facts with clean, human-readable Title Case keys.
+    """
+    facts = {}
+    if response.get("date"):
+        facts["Feature Date"] = response.get("date")
+    media_type = response.get("media_type")
+    if media_type:
+        facts["Media Type"] = str(media_type).capitalize()
+    return facts
+
 
 class APODTool(BaseTool):
     """
@@ -69,8 +81,10 @@ class APODTool(BaseTool):
             external_id=response.get("date"),
             title=response.get("title", "NASA APOD"),
             summary=response.get("explanation", ""),
+            why_interesting="",
             date=response.get("date"),
             source_url=response.get("image_url", ""),
+            facts=format_apod_facts(response),
             media=[{
                 "url": response.get("image_url", ""),
                 "type": response.get("media_type", "image")

@@ -24,7 +24,7 @@ class ResultNormalizer:
             return {
                 "result_type": ResultType.ANALYSIS.value,
                 "content": {
-                    "title": "Analysis Result",
+                    "title": "Analysis",
                     "summary": "AI Response",
                     "sections": [{"heading": "Response", "content": llm_content}] if llm_content else []
                 },
@@ -48,27 +48,29 @@ class ResultNormalizer:
                 "metadata": metadata
             }
             
-        # If multiple tools were called, return ANALYSIS with a consolidated view
-        sections = []
-        for tr in success_results:
-            title = tr.data.get("title", f"{tr.tool_name} Result")
-            content = tr.data.get("summary", "") or tr.data.get("explanation", "") or "No details provided."
-            sections.append({
-                "heading": str(title),
-                "content": str(content)
-            })
-            
+        # If multiple tools were called, return ANALYSIS with a streamlined view
         if llm_content:
-            sections.append({
-                "heading": "Synthesis",
+            sections = [{
+                "heading": "Response",
                 "content": llm_content
-            })
+            }]
+            title = "Analysis"
+        else:
+            sections = []
+            for tr in success_results:
+                title_item = tr.data.get("title", f"{tr.tool_name} Result")
+                content = tr.data.get("summary", "") or tr.data.get("explanation", "") or "No details provided."
+                sections.append({
+                    "heading": str(title_item),
+                    "content": str(content)
+                })
+            title = "Analysis"
             
         return {
             "result_type": ResultType.ANALYSIS.value,
             "content": {
-                "title": "Consolidated Analysis",
-                "summary": "Results from multiple tools",
+                "title": title,
+                "summary": "AI Response" if llm_content else "Results from multiple tools",
                 "sections": sections
             },
             "discoveries": [],
