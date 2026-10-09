@@ -76,7 +76,7 @@ class DonkiTool(BaseTool):
         if "error" in response:
             return ToolResult(
                 tool_name=self.name,
-                result_type=self.result_type,
+                result_type="error",
                 data={"error": response["error"]},
                 metadata={"success": False, "start_date": start_date, "end_date": end_date}
             )

@@ -5,7 +5,7 @@ interface ApodResultCardProps {
 }
 
 export default function ApodResultCard({ result }: ApodResultCardProps) {
-    const { title, date, explanation, media_url, media_type } = result.content;
+    const { title, date } = result.content;
     const failures = result.metadata?.tool_failures as Array<{ tool: string; error: string }> | undefined;
 
     return (
@@ -28,20 +28,8 @@ export default function ApodResultCard({ result }: ApodResultCardProps) {
                 </div>
             )}
 
-            {media_url && media_type === "image" && (
-                <div className="result-card__media" style={{ marginBottom: '16px' }}>
-                    <img src={media_url} alt={title} style={{ width: '100%', borderRadius: '4px' }} />
-                </div>
-            )}
-
-            {media_url && media_type === "video" && (
-                <div className="result-card__media" style={{ marginBottom: '16px' }}>
-                    <iframe src={media_url} title={title} style={{ width: '100%', aspectRatio: '16/9', border: 'none', borderRadius: '4px' }} allowFullScreen />
-                </div>
-            )}
-
-            <div className="result-card__content">
-                {explanation}
+            <div className="result-card__content" style={{ color: 'var(--text-2)', fontSize: '0.9rem' }}>
+                Astronomy Picture of the Day successfully retrieved and added to your discoveries above.
             </div>
         </div>
     );

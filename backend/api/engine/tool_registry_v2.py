@@ -71,7 +71,7 @@ class ToolRegistry:
         This is what gets sent to the LLM provider so it knows which
         tools are available.
         """
-        return [tool.get_openai_schema() for tool in self._tools.values()]
+        return [{"type": "function", "function": tool.get_openai_schema()} for tool in self._tools.values()]
 
     def get_tool_names(self) -> list[str]:
         """Return all registered tool names."""

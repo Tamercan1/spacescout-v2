@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Any
+from datetime import date
 
 from api.engine.contracts import (
     BaseOrchestrator,
@@ -28,9 +29,12 @@ class GenericOrchestrator(BaseOrchestrator):
         self.registry = registry
 
     def _build_initial_messages(self, context: OrchestratorContext) -> list[LLMMessage]:
+        current_date = date.today().isoformat()
         system_content = (
             "You are SpaceScout AI. "
             f"Use the available tools to help the user with their exploration: {context.space_plan_title}. "
+            f"Today's date is {current_date}. Always use real, accurate dates when calling tools. "
+            "IMPORTANT: When calling tools, you MUST use the native JSON tool calling format. DO NOT output tool calls as XML or text (e.g., no <dots_function_call> or <function_call> tags). "
             f"Summary: {context.space_plan_summary}"
         )
         messages = [

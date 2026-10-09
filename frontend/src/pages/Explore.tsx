@@ -75,6 +75,11 @@ export default function Explore() {
                 interaction_type: type
             });
             setInteractions(prev => [...prev, newInteraction]);
+            
+            // Re-fetch the space plan to instantly load any newly created discoveries
+            const updatedPlan = await getSpacePlan(plan.id);
+            setPlan(updatedPlan);
+            
             setPrompt("");
         } catch (err) {
             console.error("Failed to create interaction", err);

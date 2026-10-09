@@ -59,7 +59,7 @@ class APODTool(BaseTool):
         if "error" in response:
             return ToolResult(
                 tool_name=self.name,
-                result_type=self.result_type,
+                result_type="error",
                 data={"error": response["error"]},
                 metadata={"success": False}
             )
@@ -80,7 +80,13 @@ class APODTool(BaseTool):
         return ToolResult(
             tool_name=self.name,
             result_type=self.result_type,
-            data=response,
+            data={
+                "title": response.get("title", ""),
+                "date": response.get("date", ""),
+                "explanation": response.get("explanation", ""),
+                "media_url": response.get("image_url", ""),
+                "media_type": response.get("media_type", "")
+            },
             discoveries=[discovery],
             metadata={"success": True}
         )

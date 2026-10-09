@@ -314,3 +314,15 @@ class TestOrchestrator(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.error_code, OrchestratorErrorCode.MAX_TOOL_ROUNDS_EXCEEDED)
         self.assertEqual(self.provider.generate.call_count, 8)
+
+    def test_tool_registry_schemas_wrapper(self):
+        fake_tool = FakeTool()
+        self.registry.register(fake_tool)
+        schemas = self.registry.get_openai_schemas()
+        
+        self.assertEqual(len(schemas), 1)
+        self.assertIn("type", schemas[0])
+        self.assertEqual(schemas[0]["type"], "function")
+        self.assertIn("function", schemas[0])
+        self.assertEqual(schemas[0]["function"]["name"], "fake_tool")
+
