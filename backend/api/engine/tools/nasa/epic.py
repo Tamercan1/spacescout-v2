@@ -83,16 +83,24 @@ class EPICTool(BaseTool):
 
     def execute(self, context: ToolExecutionContext, **kwargs) -> ToolResult:
         date = kwargs.get("date")
+        requested_date = date
+        fallback_applied = False
         api_key = get_provider_key(context.user_id, "nasa") if context.user_id else None
 
         response = get_epic_earth_imagery(date=date, api_key=api_key)
 
+        # Fatal errors (auth, rate limits, network) must NOT trigger fallback
         if "error" in response:
             return ToolResult(
                 tool_name=self.name,
                 result_type="error",
                 data={"error": response["error"]},
-                metadata={"success": False, "date": date}
+                metadata={
+                    "success": False,
+                    "date": date,
+                    "fallback_applied": False,
+                    "requested_date": requested_date
+                }
             )
 
         images = response.get("images", [])
@@ -105,6 +113,9 @@ class EPICTool(BaseTool):
                 response = fallback_response
                 images = response.get("images", [])
                 obs_date = response.get("date") or "Recent"
+                fallback_applied = True
+
+        actual_date = obs_date
 
         if not images:
             return ToolResult(
@@ -117,12 +128,29 @@ class EPICTool(BaseTool):
                         "Note that DSCOVR regular observations began in mid-2015, and occasional spacecraft calibration "
                         "or telemetry gaps occur."
                     ),
-                    "date": date or "",
+                    "date": obs_date or "",
                     "image_count": 0,
-                    "images": []
+                    "images": [],
+                    "fallback_applied": fallback_applied,
+                    "requested_date": requested_date
                 },
                 discoveries=[],
-                metadata={"success": True, "count": 0, "date": date}
+                metadata={
+                    "success": True,
+                    "count": 0,
+                    "date": obs_date,
+                    "fallback_applied": fallback_applied,
+                    "requested_date": requested_date,
+                    "actual_date": actual_date
+                }
+            )
+
+        summary_text = f"Retrieved {len(images)} full-disc Earth observations from DSCOVR at Lagrange Point 1 for {obs_date}."
+        if fallback_applied:
+            summary_text = (
+                f"Note: No DSCOVR EPIC Earth imagery was available for requested date '{requested_date}'. "
+                f"Showing latest available imagery from {actual_date}.\n\n"
+                f"{summary_text}"
             )
 
         discoveries = []
@@ -137,10 +165,17 @@ class EPICTool(BaseTool):
                 })
 
             item_date = img.get("date", "").split()[0] if img.get("date") else obs_date
+            facts = format_epic_facts(img)
+            if fallback_applied:
+                facts["Requested Date"] = requested_date
+                facts["Actual Date"] = item_date
+                facts["Fallback Applied"] = "Yes"
+
+            canonical_id = img.get("identifier") or None
 
             discoveries.append(DiscoveryData(
                 source=self.name,
-                external_id=img.get("identifier") or f"epic_{obs_date}_{idx}",
+                external_id=canonical_id,
                 title=f"Earth from Deep Space ({item_date})",
                 summary=(
                     img.get("caption")
@@ -149,7 +184,7 @@ class EPICTool(BaseTool):
                 why_interesting="",
                 date=item_date,
                 source_url=img.get("image_url") or "https://epic.gsfc.nasa.gov",
-                facts=format_epic_facts(img),
+                facts=facts,
                 media=media_list
             ))
 
@@ -158,11 +193,20 @@ class EPICTool(BaseTool):
             result_type=self.result_type,
             data={
                 "title": f"Earth from DSCOVR EPIC ({obs_date})",
-                "summary": f"Retrieved {len(images)} full-disc Earth observations from DSCOVR at Lagrange Point 1 for {obs_date}.",
+                "summary": summary_text,
                 "date": obs_date,
                 "image_count": len(images),
-                "images": images[:3]
+                "images": images[:3],
+                "fallback_applied": fallback_applied,
+                "requested_date": requested_date
             },
             discoveries=discoveries,
-            metadata={"success": True, "count": len(images), "date": obs_date}
+            metadata={
+                "success": True,
+                "count": len(images),
+                "date": obs_date,
+                "fallback_applied": fallback_applied,
+                "requested_date": requested_date,
+                "actual_date": actual_date
+            }
         )

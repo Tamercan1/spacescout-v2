@@ -1,4 +1,6 @@
 import type { EpicResult } from '../../types/planner';
+import { ExternalLink } from 'lucide-react';
+import MediaViewer from '../common/MediaViewer';
 
 interface EpicResultCardProps {
     result: EpicResult;
@@ -17,7 +19,7 @@ export default function EpicResultCard({ result }: EpicResultCardProps) {
                 {title || 'Earth from DSCOVR EPIC'}
             </div>
 
-            <div className="result-card__meta" style={{ display: 'flex', gap: '16px', color: 'var(--text-3)', fontSize: '0.85rem', marginBottom: '12px' }}>
+            <div className="result-card__meta" style={{ display: 'flex', gap: '16px', color: 'var(--text-3)', fontSize: '0.85rem', marginBottom: '12px', flexWrap: 'wrap' }}>
                 {date && <span>Observation Date: <strong>{date}</strong></span>}
                 <span>Observations: <strong>{image_count ?? images?.length ?? 0}</strong></span>
                 <span>Location: <strong>Sun-Earth L1 (1M miles)</strong></span>
@@ -51,11 +53,12 @@ export default function EpicResultCard({ result }: EpicResultCardProps) {
                             }}
                         >
                             {img.image_url && (
-                                <img 
-                                    src={img.image_url} 
-                                    alt={img.caption || `Earth observation ${img.date}`} 
-                                    style={{ width: '100%', height: '180px', objectFit: 'cover', backgroundColor: '#000' }}
-                                    loading="lazy"
+                                <MediaViewer
+                                    url={img.image_url}
+                                    title={img.caption || `Earth observation ${img.date}`}
+                                    caption={img.caption || `Earth observation ${img.date}`}
+                                    sourceUrl="https://epic.gsfc.nasa.gov"
+                                    allowLightbox={true}
                                 />
                             )}
                             <div style={{ padding: '8px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -75,6 +78,18 @@ export default function EpicResultCard({ result }: EpicResultCardProps) {
                     ))}
                 </div>
             )}
+
+            <div className="result-card__footer" style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                <a
+                    href="https://epic.gsfc.nasa.gov"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '0.8rem', color: 'var(--blue, #38bdf8)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                >
+                    <span>DSCOVR EPIC Mission Archive</span>
+                    <ExternalLink size={12} />
+                </a>
+            </div>
         </div>
     );
 }

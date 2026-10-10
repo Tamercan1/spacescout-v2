@@ -82,14 +82,190 @@ class TestNASATools(TestCase):
     @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
     @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
     def test_apod_tool_failure(self, mock_get, mock_get_provider_key):
-        mock_get.return_value = {"error": "NASA API key was rejected. Check NASA_API_KEY."}
+        mock_get.return_value = {"error": "NASA API key was rejected. Check NASA_API_KEY.", "status_code": 401, "error_type": "auth_error"}
         
         tool = APODTool()
         result = tool.execute(self.context, date="2023-10-01")
         
+        # Verify fallback was NOT called on auth failure
+        mock_get.assert_called_once_with(date="2023-10-01", api_key="mock_nasa_key")
         self.assertFalse(result.metadata.get("success"))
         self.assertEqual(result.data["error"], "NASA API key was rejected. Check NASA_API_KEY.")
         self.assertEqual(len(result.discoveries), 0)
+        self.assertFalse(result.metadata["fallback_applied"])
+
+    def test_apod_tool_date_validation(self):
+        tool = APODTool()
+        with self.assertRaises(ValueError):
+            tool.validate_arguments({"date": "invalid-date"})
+
+        with self.assertRaises(ValueError):
+            tool.validate_arguments({"date": "2026/10/01"})
+
+        validated = tool.validate_arguments({"date": "2026-10-01"})
+        self.assertEqual(validated["date"], "2026-10-01")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_fallback_on_future_date(self, mock_get, mock_get_provider_key):
+        # First call with future date fails with status 400; second fallback call with date=None succeeds
+        mock_get.side_effect = [
+            {"error": "NASA API returned an error (status 400).", "status_code": 400, "error_type": "bad_request"},
+            {
+                "date": "2026-10-09",
+                "title": "Latest Galaxy",
+                "explanation": "A spiral galaxy observed recently.",
+                "image_url": "http://nasa.gov/latest.jpg",
+                "media_type": "image",
+                "source": "NASA"
+            }
+        ]
+
+        tool = APODTool()
+        result = tool.execute(self.context, date="2099-01-01")
+
+        self.assertEqual(mock_get.call_count, 2)
+        mock_get.assert_any_call(date="2099-01-01", api_key="mock_nasa_key")
+        mock_get.assert_any_call(date=None, api_key="mock_nasa_key")
+
+        self.assertTrue(result.metadata["success"])
+        self.assertTrue(result.metadata["fallback_applied"])
+        self.assertEqual(result.metadata["requested_date"], "2099-01-01")
+        self.assertEqual(result.metadata["actual_date"], "2026-10-09")
+        self.assertTrue(result.data["fallback_applied"])
+        self.assertIn("Note: APOD for requested date '2099-01-01' was unavailable", result.data["explanation"])
+
+        self.assertEqual(len(result.discoveries), 1)
+        discovery = result.discoveries[0]
+        self.assertEqual(discovery.date, "2026-10-09")
+        self.assertEqual(discovery.external_id, "2026-10-09")
+        self.assertEqual(discovery.facts["Fallback Applied"], "Yes")
+        self.assertEqual(discovery.facts["Requested Date"], "2099-01-01")
+        self.assertEqual(discovery.facts["Actual Date"], "2026-10-09")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_fallback_on_confirmed_date_400(self, mock_get, mock_get_provider_key):
+        # Confirmed date-related 400 returns date-specific error message
+        mock_get.side_effect = [
+            {
+                "error": "NASA API returned an error (status 400): Date must be between Jun 16, 1995 and Oct 10, 2026.",
+                "status_code": 400,
+                "error_type": "bad_request",
+                "details": "Date must be between Jun 16, 1995 and Oct 10, 2026."
+            },
+            {
+                "date": "2026-10-09",
+                "title": "Latest APOD",
+                "explanation": "Latest picture.",
+                "image_url": "http://nasa.gov/latest.jpg",
+                "media_type": "image",
+                "source": "NASA"
+            }
+        ]
+        tool = APODTool()
+        result = tool.execute(self.context, date="2023-10-01")
+
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertTrue(result.metadata["success"])
+        self.assertTrue(result.metadata["fallback_applied"])
+        self.assertEqual(result.metadata["actual_date"], "2026-10-09")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_no_fallback_on_unrelated_400(self, mock_get, mock_get_provider_key):
+        # Unrelated 400 (e.g. invalid query parameter, concept_tags syntax error)
+        mock_get.return_value = {
+            "error": "NASA API returned an error (status 400): Invalid parameter 'concept_tags'.",
+            "status_code": 400,
+            "error_type": "bad_request",
+            "details": "Invalid parameter 'concept_tags'."
+        }
+        tool = APODTool()
+        result = tool.execute(self.context, date="2023-10-01")
+
+        mock_get.assert_called_once_with(date="2023-10-01", api_key="mock_nasa_key")
+        self.assertFalse(result.metadata["success"])
+        self.assertFalse(result.metadata["fallback_applied"])
+        self.assertEqual(result.result_type, "error")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_no_fallback_on_400_containing_validate(self, mock_get, mock_get_provider_key):
+        # HTTP 400 details contain 'validate' (substring 'date' in 'validate') for unrelated parameter
+        mock_get.return_value = {
+            "error": "NASA API returned an error (status 400): Failed to validate parameter 'hd'.",
+            "status_code": 400,
+            "error_type": "bad_request",
+            "details": "Failed to validate parameter 'hd'."
+        }
+        tool = APODTool()
+        result = tool.execute(self.context, date="2023-10-01")
+
+        mock_get.assert_called_once_with(date="2023-10-01", api_key="mock_nasa_key")
+        self.assertFalse(result.metadata["success"])
+        self.assertFalse(result.metadata["fallback_applied"])
+        self.assertEqual(result.result_type, "error")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_no_fallback_on_server_errors_500_503(self, mock_get, mock_get_provider_key):
+        for status_code in [500, 503]:
+            mock_get.reset_mock()
+            mock_get.return_value = {
+                "error": f"NASA API returned an error (status {status_code}).",
+                "status_code": status_code,
+                "error_type": "server_error"
+            }
+            tool = APODTool()
+            result = tool.execute(self.context, date="2023-10-01")
+
+            mock_get.assert_called_once_with(date="2023-10-01", api_key="mock_nasa_key")
+            self.assertFalse(result.metadata["success"])
+            self.assertFalse(result.metadata["fallback_applied"])
+            self.assertEqual(result.result_type, "error")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_no_fallback_on_not_found_404(self, mock_get, mock_get_provider_key):
+        mock_get.return_value = {
+            "error": "NASA API returned an error (status 404).",
+            "status_code": 404,
+            "error_type": "not_found"
+        }
+        tool = APODTool()
+        result = tool.execute(self.context, date="2023-10-01")
+
+        mock_get.assert_called_once_with(date="2023-10-01", api_key="mock_nasa_key")
+        self.assertFalse(result.metadata["success"])
+        self.assertFalse(result.metadata["fallback_applied"])
+        self.assertEqual(result.result_type, "error")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_no_fallback_on_rate_limit(self, mock_get, mock_get_provider_key):
+        mock_get.return_value = {"error": "NASA API rate limit reached. Try again later.", "status_code": 429, "error_type": "rate_limit"}
+
+        tool = APODTool()
+        result = tool.execute(self.context, date="2023-10-01")
+
+        mock_get.assert_called_once_with(date="2023-10-01", api_key="mock_nasa_key")
+        self.assertFalse(result.metadata["success"])
+        self.assertFalse(result.metadata["fallback_applied"])
+        self.assertEqual(result.result_type, "error")
+
+    @patch("api.engine.tools.nasa.apod.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.apod.get_astronomy_picture")
+    def test_apod_tool_no_fallback_on_network_timeout(self, mock_get, mock_get_provider_key):
+        mock_get.return_value = {"error": "Network Error: Could not reach the NASA API.", "error_type": "network_error"}
+
+        tool = APODTool()
+        result = tool.execute(self.context, date="2023-10-01")
+
+        mock_get.assert_called_once_with(date="2023-10-01", api_key="mock_nasa_key")
+        self.assertFalse(result.metadata["success"])
+        self.assertFalse(result.metadata["fallback_applied"])
+        self.assertEqual(result.result_type, "error")
 
     @patch("api.engine.tools.nasa.neows.get_provider_key", return_value="mock_nasa_key")
     @patch("api.engine.tools.nasa.neows.search_near_earth_objects")
@@ -404,6 +580,69 @@ class TestNASATools(TestCase):
         self.assertIn("No media archive assets found", result.data["summary"])
 
     @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_empty_page_one_messaging(self, mock_search):
+        mock_search.return_value = {"count": 0, "items": []}
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="NonExistentMission123", page=1)
+
+        self.assertEqual(result.result_type, ResultType.NASA_IMAGES.value)
+        self.assertTrue(result.metadata["success"])
+        self.assertEqual(result.data["item_count"], 0)
+        self.assertEqual(result.data["summary"], "No media archive assets found matching 'NonExistentMission123'.")
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_empty_later_page_messaging(self, mock_search):
+        mock_search.return_value = {"count": 0, "items": []}
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="Apollo 11", page=3)
+
+        self.assertEqual(result.result_type, ResultType.NASA_IMAGES.value)
+        self.assertTrue(result.metadata["success"])
+        self.assertEqual(result.data["item_count"], 0)
+        self.assertEqual(result.data["summary"], "No further media archive assets found on page 3 matching 'Apollo 11'.")
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_total_hits_propagation(self, mock_search):
+        mock_search.return_value = {
+            "count": 1,
+            "total_hits": 1420,
+            "items": [{
+                "nasa_id": "PIA9999",
+                "title": "Cosmic Cloud",
+                "description": "A cloud in space",
+                "date_created": "2023-01-01T00:00:00Z",
+                "center": "JPL",
+                "keywords": ["Nebula"],
+                "media_type": "image",
+                "image_url": "http://nasa.gov/cloud.jpg"
+            }]
+        }
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="Nebula", page=1)
+
+        self.assertEqual(result.data["item_count"], 1)
+        self.assertEqual(result.data["total_hits"], 1420)
+        self.assertEqual(result.metadata["count"], 1)
+        self.assertEqual(result.metadata["total_hits"], 1420)
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_missing_total_hits_handled_gracefully(self, mock_search):
+        mock_search.return_value = {
+            "count": 1,
+            "items": [{
+                "nasa_id": "PIA9999",
+                "title": "Cosmic Cloud",
+                "image_url": "http://nasa.gov/cloud.jpg"
+            }]
+        }
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="Nebula", page=1)
+
+        self.assertEqual(result.data["item_count"], 1)
+        self.assertNotIn("total_hits", result.data)
+        self.assertNotIn("total_hits", result.metadata)
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
     def test_nasa_images_tool_query_relaxation(self, mock_search):
         mock_search.return_value = {
             "count": 1,
@@ -549,15 +788,161 @@ class TestNASATools(TestCase):
     @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
     @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
     def test_epic_tool_api_failure(self, mock_get_imagery, mock_get_key):
-        mock_get_imagery.return_value = {"error": "NASA API key was rejected."}
+        mock_get_imagery.return_value = {"error": "NASA API key was rejected.", "status_code": 401}
 
         tool = EPICTool()
-        result = tool.execute(self.context)
+        result = tool.execute(self.context, date="2026-10-05")
 
+        mock_get_imagery.assert_called_once_with(date="2026-10-05", api_key="mock_nasa_key")
         self.assertEqual(result.result_type, "error")
         self.assertFalse(result.metadata.get("success"))
         self.assertEqual(result.data["error"], "NASA API key was rejected.")
+        self.assertFalse(result.metadata["fallback_applied"])
         self.assertEqual(len(result.discoveries), 0)
+
+    @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
+    def test_epic_tool_fallback_on_future_empty_imagery(self, mock_get_imagery, mock_get_key):
+        # First call with requested date returns empty images (e.g. future date or telemetry gap)
+        # Second call with date=None returns latest available images
+        mock_get_imagery.side_effect = [
+            {"date": "2099-01-01", "count": 0, "images": []},
+            {
+                "date": "2026-10-05",
+                "count": 1,
+                "images": [
+                    {
+                        "identifier": "20261005001752",
+                        "caption": "Earth view from DSCOVR",
+                        "image": "epic_1b_20261005001752",
+                        "date": "2026-10-05 00:13:03",
+                        "centroid_coordinates": {"lat": 10.0, "lon": 20.0}
+                    }
+                ]
+            }
+        ]
+
+        tool = EPICTool()
+        result = tool.execute(self.context, date="2099-01-01")
+
+        self.assertEqual(mock_get_imagery.call_count, 2)
+        mock_get_imagery.assert_any_call(date="2099-01-01", api_key="mock_nasa_key")
+        mock_get_imagery.assert_any_call(date=None, api_key="mock_nasa_key")
+
+        self.assertTrue(result.metadata["success"])
+        self.assertTrue(result.metadata["fallback_applied"])
+        self.assertEqual(result.metadata["requested_date"], "2099-01-01")
+        self.assertEqual(result.metadata["actual_date"], "2026-10-05")
+        self.assertTrue(result.data["fallback_applied"])
+        self.assertIn("Note: No DSCOVR EPIC Earth imagery was available for requested date '2099-01-01'", result.data["summary"])
+
+        self.assertEqual(len(result.discoveries), 1)
+        discovery = result.discoveries[0]
+        self.assertEqual(discovery.date, "2026-10-05")
+        self.assertEqual(discovery.external_id, "20261005001752")
+        self.assertEqual(discovery.facts["Fallback Applied"], "Yes")
+        self.assertEqual(discovery.facts["Requested Date"], "2099-01-01")
+        self.assertEqual(discovery.facts["Actual Date"], "2026-10-05")
+
+    @patch("api.engine.tools.nasa.epic.get_provider_key", return_value="mock_nasa_key")
+    @patch("api.engine.tools.nasa.epic.get_epic_earth_imagery")
+    def test_epic_tool_missing_identifier_does_not_produce_synthetic_id(self, mock_get_imagery, mock_get_key):
+        # When identifier is missing/None, external_id must be None, not an index-based synthetic string
+        mock_get_imagery.return_value = {
+            "date": "2026-10-07",
+            "count": 1,
+            "images": [
+                {
+                    "identifier": None,
+                    "caption": "Earth observation without identifier",
+                    "image": "epic_1b_no_id",
+                    "date": "2026-10-07 00:00:00",
+                    "image_url": "https://epic.gsfc.nasa.gov/archive/natural/2026/10/07/jpg/epic_1b_no_id.jpg"
+                }
+            ]
+        }
+        tool = EPICTool()
+        result = tool.execute(self.context, date="2026-10-07")
+
+        self.assertTrue(result.metadata["success"])
+        self.assertEqual(len(result.discoveries), 1)
+        discovery = result.discoveries[0]
+        self.assertIsNone(discovery.external_id)
+
+    def test_nasa_images_pagination_bounds(self):
+        tool = NASAImagesTool()
+        self.assertEqual(tool.validate_arguments({"query": "JWST", "page": -5})["page"], 1)
+        self.assertEqual(tool.validate_arguments({"query": "JWST", "page": 0})["page"], 1)
+        self.assertEqual(tool.validate_arguments({"query": "JWST", "page": 200})["page"], 100)
+        self.assertEqual(tool.validate_arguments({"query": "JWST", "page": 45})["page"], 45)
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_full_page_duplication_honest_empty_result(self, mock_search):
+        # Create plan and discoveries with existing nasa_ids
+        plan = SpacePlan.objects.create(user=self.user, prompt="JWST exploration", title="JWST Plan")
+        Discovery.objects.create(
+            space_plan=plan,
+            source="nasa_images",
+            external_id="PIA25001",
+            type="nasa_images",
+            title="JWST Deep Field 1",
+            summary="Item 1"
+        )
+        Discovery.objects.create(
+            space_plan=plan,
+            source="nasa_images",
+            external_id="PIA25002",
+            type="nasa_images",
+            title="JWST Deep Field 2",
+            summary="Item 2"
+        )
+
+        mock_search.return_value = {
+            "count": 2,
+            "items": [
+                {"nasa_id": "PIA25001", "title": "JWST Deep Field 1", "image_url": "http://nasa.gov/1.jpg"},
+                {"nasa_id": "PIA25002", "title": "JWST Deep Field 2", "image_url": "http://nasa.gov/2.jpg"}
+            ]
+        }
+
+        ctx = ToolExecutionContext(space_plan_id=plan.id, user_id=self.user.id)
+        tool = NASAImagesTool()
+        result = tool.execute(ctx, query="JWST", page=1)
+
+        self.assertTrue(result.metadata["success"])
+        self.assertTrue(result.metadata["all_items_already_exist"])
+        self.assertEqual(result.metadata["returned_count"], 0)
+        self.assertEqual(len(result.discoveries), 0)
+        self.assertEqual(result.data["item_count"], 0)
+        self.assertIn("already been added to this exploration plan", result.data["summary"])
+
+    def test_discovery_source_choices_and_facts_dict_integrity(self):
+        plan = SpacePlan.objects.create(user=self.user, prompt="Testing models", title="Test Plan")
+        d_nasa = Discovery(
+            space_plan=plan,
+            source="nasa_images",
+            external_id="PIA99999",
+            type="nasa_images",
+            title="NASA Image Asset",
+            summary="A test asset"
+        )
+        d_nasa.full_clean()
+        d_nasa.save()
+
+        d_epic = Discovery(
+            space_plan=plan,
+            source="epic",
+            external_id="epic_123",
+            type="epic",
+            title="EPIC Earth Asset",
+            summary="Earth from space"
+        )
+        d_epic.full_clean()
+        d_epic.save()
+
+        # Check default facts is a dict
+        self.assertIsInstance(d_nasa.facts, dict)
+        self.assertIsInstance(d_epic.facts, dict)
 
     # ============================================================
     # REGISTRY & PERSISTENCE INTEGRATION TESTS

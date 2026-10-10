@@ -89,6 +89,8 @@ class Discovery(models.Model):
         ("apod", "Astronomy Picture of the Day"),
         ("neows", "Near Earth Object Web Service"),
         ("donki", "DONKI"),
+        ("nasa_images", "NASA Image and Video Library"),
+        ("epic", "Earth Polychromatic Imaging Camera"),
     ]
 
     space_plan = models.ForeignKey(SpacePlan, on_delete=models.CASCADE, related_name="discoveries")
@@ -104,7 +106,7 @@ class Discovery(models.Model):
 
     summary = models.TextField()
     why_interesting = models.TextField(blank=True)
-    facts = models.JSONField(default=list, blank=True)
+    facts = models.JSONField(default=dict, blank=True)
     tags = models.JSONField(default=list, blank=True)
     details = models.JSONField(default=dict, blank=True)
     sort_order = models.PositiveIntegerField(default=0)

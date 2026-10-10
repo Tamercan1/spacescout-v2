@@ -78,6 +78,8 @@ class NASAImagesTool(BaseTool):
                 page_int = int(page)
                 if page_int < 1:
                     arguments["page"] = 1
+                elif page_int > 100:
+                    arguments["page"] = 100
                 else:
                     arguments["page"] = page_int
             except (ValueError, TypeError):
@@ -95,26 +97,41 @@ class NASAImagesTool(BaseTool):
                 tool_name=self.name,
                 result_type="error",
                 data={"error": response["error"]},
-                metadata={"success": False, "query": query}
+                metadata={"success": False, "query": query, "page": page}
             )
 
         items = response.get("items", [])
+        total_hits = response.get("total_hits")
         actual_query = response.get("query") or query
         original_query = response.get("original_query")
 
         if not items:
+            summary_msg = (
+                f"No media archive assets found matching '{query}'."
+                if page == 1
+                else f"No further media archive assets found on page {page} matching '{query}'."
+            )
+            data_dict = {
+                "title": f"NASA Media Archive: {query}",
+                "summary": summary_msg,
+                "query": query,
+                "page": page,
+                "item_count": 0,
+                "items": []
+            }
+            if total_hits is not None:
+                data_dict["total_hits"] = total_hits
+
+            meta_dict = {"success": True, "count": 0, "query": query, "page": page}
+            if total_hits is not None:
+                meta_dict["total_hits"] = total_hits
+
             return ToolResult(
                 tool_name=self.name,
                 result_type=self.result_type,
-                data={
-                    "title": f"NASA Media Archive: {query}",
-                    "summary": f"No media archive assets found matching '{query}'.",
-                    "query": query,
-                    "item_count": 0,
-                    "items": []
-                },
+                data=data_dict,
                 discoveries=[],
-                metadata={"success": True, "count": 0, "query": query}
+                metadata=meta_dict
             )
 
         # Filter out discoveries already in the SpacePlan so follow-ups deliver fresh discoveries
@@ -129,7 +146,44 @@ class NASAImagesTool(BaseTool):
                 pass
 
         fresh_items = [it for it in items if (it.get("nasa_id") or "") not in existing_external_ids]
-        selected_items = fresh_items[:6] if fresh_items else items[:6]
+
+        # If all items on this page already exist in the plan, return an honest empty result instead of re-injecting duplicates
+        if not fresh_items and existing_external_ids:
+            data_dict = {
+                "title": f"NASA Media Archive: {actual_query}",
+                "summary": (
+                    f"All {len(items)} media items from page {page} matching '{actual_query}' "
+                    f"have already been added to this exploration plan. "
+                    f"Try requesting the next page (page {page + 1}) or searching with a more specific term."
+                ),
+                "query": actual_query,
+                "page": page,
+                "item_count": 0,
+                "items": []
+            }
+            if total_hits is not None:
+                data_dict["total_hits"] = total_hits
+
+            meta_dict = {
+                "success": True,
+                "count": len(items),
+                "query": actual_query,
+                "page": page,
+                "returned_count": 0,
+                "all_items_already_exist": True
+            }
+            if total_hits is not None:
+                meta_dict["total_hits"] = total_hits
+
+            return ToolResult(
+                tool_name=self.name,
+                result_type=self.result_type,
+                data=data_dict,
+                discoveries=[],
+                metadata=meta_dict
+            )
+
+        selected_items = fresh_items[:6]
 
         discoveries = []
         for idx, item in enumerate(selected_items):
@@ -147,7 +201,7 @@ class NASAImagesTool(BaseTool):
 
             discoveries.append(DiscoveryData(
                 source=self.name,
-                external_id=item.get("nasa_id") or f"nasa_img_{actual_query}_{idx}",
+                external_id=item.get("nasa_id") or None,
                 title=item.get("title") or f"NASA Asset: {actual_query}",
                 summary=item.get("description") or "NASA imagery asset.",
                 why_interesting="",
@@ -163,22 +217,30 @@ class NASAImagesTool(BaseTool):
             else f"Retrieved {len(selected_items)} media items matching '{actual_query}' (refined from '{original_query}')."
         )
 
+        data_dict = {
+            "title": f"NASA Media Archive: {actual_query}",
+            "summary": summary_text,
+            "query": actual_query,
+            "item_count": len(items),
+            "items": selected_items
+        }
+        if total_hits is not None:
+            data_dict["total_hits"] = total_hits
+
+        meta_dict = {
+            "success": True,
+            "count": len(items),
+            "query": actual_query,
+            "original_query": original_query,
+            "returned_count": len(selected_items)
+        }
+        if total_hits is not None:
+            meta_dict["total_hits"] = total_hits
+
         return ToolResult(
             tool_name=self.name,
             result_type=self.result_type,
-            data={
-                "title": f"NASA Media Archive: {actual_query}",
-                "summary": summary_text,
-                "query": actual_query,
-                "item_count": len(items),
-                "items": selected_items
-            },
+            data=data_dict,
             discoveries=discoveries,
-            metadata={
-                "success": True,
-                "count": len(items),
-                "query": actual_query,
-                "original_query": original_query,
-                "returned_count": len(selected_items)
-            }
+            metadata=meta_dict
         )

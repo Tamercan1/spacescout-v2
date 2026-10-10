@@ -12,7 +12,8 @@ from api.engine.contracts import (
     ToolExecutionError,
     ResultType,
     BaseTool,
-    ToolExecutionContext
+    ToolExecutionContext,
+    PreviousInteractionContext
 )
 from api.engine.tool_registry_v2 import ToolRegistry
 from api.engine.orchestrator import GenericOrchestrator
@@ -470,4 +471,102 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(len(result.discoveries), 1)
         # Strict LLM-only policy: remains empty string if LLM fails
         self.assertEqual(result.discoveries[0].why_interesting, "")
+
+    def test_multi_turn_history_message_building_and_current_prompt_exact_once(self):
+        past1 = PreviousInteractionContext(
+            interaction_id="past-1",
+            user_prompt="Show me Mars images",
+            assistant_response_summary="Found 3 images of Mars.",
+            target_discoveries=[{"id": "1", "title": "Mars Rover"}],
+            added_discoveries=[{"id": "2", "title": "Perseverance"}]
+        )
+        past2 = PreviousInteractionContext(
+            interaction_id="past-2",
+            user_prompt="Tell me about Perseverance",
+            assistant_response_summary="Perseverance landed in Jezero Crater.",
+            target_discoveries=[{"id": "2", "title": "Perseverance"}],
+            added_discoveries=[]
+        )
+        ctx = OrchestratorContext(
+            user_id=1,
+            space_plan_id=10,
+            space_plan_title="Mars Exploration",
+            space_plan_summary="Exploring Mars missions",
+            interaction_id="current-int",
+            interaction_type="find_more",
+            user_prompt="Show me more images of Jezero Crater",
+            previous_interactions=[past1, past2]
+        )
+
+        messages = self.orchestrator._build_initial_messages(ctx)
+
+        # 1. System prompt is first
+        self.assertEqual(messages[0].role, "system")
+
+        # 2. History turns strictly alternate user -> assistant
+        user_messages = [m for m in messages if m.role == "user"]
+        assistant_messages = [m for m in messages if m.role == "assistant"]
+
+        # Exactly 3 user messages: 2 from history + 1 current prompt
+        self.assertEqual(len(user_messages), 3)
+        self.assertEqual(user_messages[0].content, "Show me Mars images")
+        self.assertEqual(user_messages[1].content, "Tell me about Perseverance")
+        self.assertEqual(user_messages[2].content, "Show me more images of Jezero Crater")
+
+        # Exactly 2 assistant messages in history
+        self.assertEqual(len(assistant_messages), 2)
+        self.assertIn("Found 3 images of Mars.", assistant_messages[0].content)
+        self.assertIn("[Targeted context: Mars Rover (ID: 1)]", assistant_messages[0].content)
+        self.assertIn("Perseverance landed in Jezero Crater.", assistant_messages[1].content)
+
+        # 3. Final message is strictly the current user prompt, exactly once
+        self.assertEqual(messages[-1].role, "user")
+        self.assertEqual(messages[-1].content, ctx.user_prompt)
+
+        # Verify current prompt appears exactly once across the whole payload
+        current_occurrences = [m for m in messages if m.content == ctx.user_prompt]
+        self.assertEqual(len(current_occurrences), 1)
+
+    def test_multi_turn_tool_selection_flow(self):
+        past = PreviousInteractionContext(
+            interaction_id="past-1",
+            user_prompt="Search NASA images for Bennu",
+            assistant_response_summary="Found OSIRIS-REx asteroid Bennu assets.",
+            target_discoveries=[],
+            added_discoveries=[]
+        )
+        ctx = OrchestratorContext(
+            user_id=1,
+            space_plan_id=10,
+            space_plan_title="Asteroid Bennu",
+            space_plan_summary="Mission Bennu",
+            interaction_id="int-2",
+            interaction_type="find_more",
+            user_prompt="Give me page 2 of those images",
+            previous_interactions=[past]
+        )
+
+        fake_tool = FakeTool(name="nasa_images")
+        fake_tool.execute_mock.return_value = ToolResult(
+            tool_name="nasa_images",
+            result_type="nasa_images",
+            data={"title": "Page 2 of Bennu", "items": []},
+            discoveries=[]
+        )
+        self.registry.register(fake_tool)
+
+        # First LLM call requests nasa_images with page 2
+        # Second LLM call synthesizes the answer
+        self.provider.generate.side_effect = [
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="nasa_images", arguments={"arg1": "page_2"})]
+            ),
+            LLMResponse(content="Here are the page 2 results for Bennu.")
+        ]
+
+        result = self.orchestrator.execute(ctx)
+        self.assertTrue(result.success)
+        self.assertEqual(result.llm_content, "Here are the page 2 results for Bennu.")
+        fake_tool.execute_mock.assert_called_once()
 

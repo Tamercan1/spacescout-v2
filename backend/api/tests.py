@@ -1,3 +1,5 @@
+import json
+from unittest.mock import patch, MagicMock
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -186,6 +188,82 @@ class SpacePlanTests(TestCase):
         
         self.plan2.refresh_from_db()
         self.assertNotEqual(self.plan2.title, "Stolen Plan")
+
+    @patch("api.views.run_space_planner")
+    def test_plan_creation_with_user_context_and_external_id_persistence(self, mock_planner):
+        from api.engine.schema import SpacePlan as PydanticSpacePlan, Discovery as PydanticDiscovery
+        mock_planner.return_value = PydanticSpacePlan(
+            title="Cosmos Plan",
+            summary="Cosmos exploration summary",
+            discoveries=[
+                PydanticDiscovery(
+                    type="apod",
+                    title="APOD Cosmic View",
+                    date="2023-10-01",
+                    media=None,
+                    summary="A view of the cosmos",
+                    why_interesting="Very interesting",
+                    facts={"Feature Date": "2023-10-01"},
+                    source="http://nasa.gov/apod"
+                ),
+                PydanticDiscovery(
+                    type="nasa_images",
+                    title="JWST Discovery",
+                    date="2022-07-12",
+                    media=None,
+                    summary="Deep field",
+                    why_interesting="Deep space",
+                    facts={"NASA ID": "PIA25000"},
+                    source="http://images.nasa.gov"
+                )
+            ]
+        )
+
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('space_plan_create_view')
+        response = self.client.post(url, {"prompt": "Explore the cosmos"})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_planner.assert_called_once_with("Explore the cosmos", user=self.user1)
+
+        saved_plan = SpacePlan.objects.get(id=response.data["id"])
+        self.assertEqual(saved_plan.user, self.user1)
+        
+        apod_disc = saved_plan.discoveries.filter(source="apod").first()
+        self.assertIsNotNone(apod_disc)
+        self.assertEqual(apod_disc.external_id, "2023-10-01")
+
+        nasa_disc = saved_plan.discoveries.filter(source="nasa_images").first()
+        self.assertIsNotNone(nasa_disc)
+        self.assertEqual(nasa_disc.external_id, "PIA25000")
+
+    @patch("api.engine.space_planner.call_llm_with_fallback")
+    def test_run_space_planner_uses_user_preferred_model(self, mock_llm_call):
+        from api.engine.space_planner import run_space_planner
+        self.user1.profile.preferred_model = "anthropic/claude-3.5-sonnet"
+        self.user1.profile.save()
+
+        # Mock LLM return message
+        mock_message = MagicMock()
+        mock_message.tool_calls = None
+        mock_message.content = json.dumps({
+            "title": "Mock Plan",
+            "summary": "Mock Summary",
+            "discoveries": []
+        })
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_llm_call.return_value = mock_response
+
+        plan = run_space_planner("Investigate Mars", user=self.user1)
+        self.assertEqual(plan.title, "Mock Plan")
+
+        # Verify preferred model was passed as the first model in model_list
+        mock_llm_call.assert_called()
+        first_call_kwargs = mock_llm_call.call_args_list[0][1]
+        self.assertEqual(first_call_kwargs["model_list"][0], "anthropic/claude-3.5-sonnet")
 
 
 from unittest.mock import patch

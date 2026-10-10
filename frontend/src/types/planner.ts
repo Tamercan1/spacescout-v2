@@ -19,7 +19,7 @@ export interface Discovery {
     date: string | null;
     summary: string;
     why_interesting: string;
-    facts: unknown[];
+    facts: Record<string, unknown>;
     tags: string[];
     details: Record<string, unknown>;
     sort_order: number;

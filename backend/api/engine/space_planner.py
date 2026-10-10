@@ -45,12 +45,21 @@ class SpacePlannerError(Exception):
     pass
 
 
-def handle_tool_call(tool_call):
+def handle_tool_call(tool_call, user=None):
 
     function_name = tool_call.function.name
     arguments = json.loads(tool_call.function.arguments)
 
     handler = tool_registry[function_name]["handler"]
+
+    if user and "api_key" not in arguments:
+        from api.services.credentials import get_provider_key
+        user_nasa_key = get_provider_key(user, "nasa")
+        if user_nasa_key:
+            import inspect
+            sig = inspect.signature(handler)
+            if "api_key" in sig.parameters:
+                arguments["api_key"] = user_nasa_key
 
     try:
         return handler(**arguments)
@@ -70,13 +79,13 @@ def parse_and_validate(content):
     return plan
 
 
-def llm_call(messages, response_format=None, tool_choice=None):
+def llm_call(messages, client_override=None, model_list_override=None, response_format=None, tool_choice=None):
 
     kwargs = {
-        "client": client, 
+        "client": client_override or client, 
         "messages": messages, 
         "tools": tools, 
-        "model_list": MODELS_LIST,
+        "model_list": model_list_override or MODELS_LIST,
     }
 
     if response_format is not None:
@@ -90,7 +99,22 @@ def llm_call(messages, response_format=None, tool_choice=None):
         raise SpacePlannerError("All AI models are currently unavailable.") from exc
 
 
-def run_space_planner(user_request) -> SpacePlan:
+def run_space_planner(user_request, user=None) -> SpacePlan:
+
+    active_client = client
+    active_models = list(MODELS_LIST)
+
+    if user:
+        from api.services.credentials import get_provider_key
+        user_openrouter_key = get_provider_key(user, "openrouter")
+        if user_openrouter_key:
+            active_client = OpenAI(api_key=user_openrouter_key, base_url=OPENROUTER_BASE_URL)
+        if hasattr(user, 'profile') and user.profile.preferred_model:
+            preferred = user.profile.preferred_model.strip()
+            if preferred:
+                if preferred in active_models:
+                    active_models.remove(preferred)
+                active_models.insert(0, preferred)
 
     messages = [
         {
@@ -103,7 +127,7 @@ def run_space_planner(user_request) -> SpacePlan:
         }
     ]
 
-    response = llm_call(messages)
+    response = llm_call(messages, client_override=active_client, model_list_override=active_models)
     assistant_message = response.choices[0].message
 
     rounds = 0
@@ -114,7 +138,7 @@ def run_space_planner(user_request) -> SpacePlan:
 
         for tool_call in assistant_message.tool_calls:
 
-            result = handle_tool_call(tool_call)
+            result = handle_tool_call(tool_call, user=user)
 
             messages.append({
                 "role": "tool",
@@ -122,7 +146,7 @@ def run_space_planner(user_request) -> SpacePlan:
                 "content": json.dumps(result)
             })
 
-        response = llm_call(messages)
+        response = llm_call(messages, client_override=active_client, model_list_override=active_models)
         
         assistant_message = response.choices[0].message
 
@@ -135,7 +159,13 @@ def run_space_planner(user_request) -> SpacePlan:
         ),
     })
 
-    final_response = llm_call(messages, response_format=RESPONSE_FORMAT, tool_choice="none")
+    final_response = llm_call(
+        messages,
+        client_override=active_client,
+        model_list_override=active_models,
+        response_format=RESPONSE_FORMAT,
+        tool_choice="none"
+    )
 
     final_data = final_response.choices[0].message.content
 

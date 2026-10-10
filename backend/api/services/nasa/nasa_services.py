@@ -15,6 +15,16 @@ NASA_IMAGES_SEARCH_URL = "https://images-api.nasa.gov/search"
 NASA_EPIC_URL = "https://api.nasa.gov/EPIC/api/natural"
 
 
+class APIError(str):
+    """String subclass that carries optional HTTP status_code, error_type, and details."""
+    def __new__(cls, message: str, status_code: int | None = None, error_type: str = "unknown", details: str | None = None):
+        obj = super().__new__(cls, message)
+        obj.status_code = status_code
+        obj.error_type = error_type
+        obj.details = details or ""
+        return obj
+
+
 def get(url, params, timeout=15):
     try:
         response = httpx.get(url, params=params, timeout=timeout, follow_redirects=True)
@@ -23,8 +33,8 @@ def get(url, params, timeout=15):
         content_type = response.headers.get("content-type", "")
         if "json" not in content_type and not response.text.strip().startswith(("{", "[")):
             if str(response.url) != url:
-                return None, f"NASA API endpoint redirected unexpectedly to {response.url}"
-            return None, "NASA API returned a non-JSON response."
+                return None, APIError(f"NASA API endpoint redirected unexpectedly to {response.url}", status_code=302, error_type="redirect")
+            return None, APIError("NASA API returned a non-JSON response.", status_code=200, error_type="invalid_format")
 
         return response.json(), None
 
@@ -32,18 +42,35 @@ def get(url, params, timeout=15):
         status = err.response.status_code
         if status in [301, 302, 307, 308]:
             loc = err.response.headers.get("Location", "")
-            return None, f"NASA API returned redirect (status {status}) to {loc}."
+            return None, APIError(f"NASA API returned redirect (status {status}) to {loc}.", status_code=status, error_type="redirect")
         elif status == 429:
             message = "NASA API rate limit reached. Try again later."
+            return None, APIError(message, status_code=429, error_type="rate_limit")
         elif status in [401, 403]:
             message = "NASA API key was rejected. Check NASA_API_KEY."
+            return None, APIError(message, status_code=status, error_type="auth_error")
+        elif status == 400:
+            detail = ""
+            try:
+                err_json = err.response.json()
+                if isinstance(err_json, dict):
+                    detail = err_json.get("msg") or err_json.get("message") or err_json.get("error") or ""
+            except Exception:
+                try:
+                    detail = err.response.text.strip()[:200]
+                except Exception:
+                    detail = ""
+            message = f"NASA API returned an error (status 400): {detail}" if detail else f"NASA API returned an error (status 400)."
+            return None, APIError(message, status_code=400, error_type="bad_request", details=detail)
+        elif status == 404:
+            message = f"NASA API returned an error (status {status})."
+            return None, APIError(message, status_code=404, error_type="not_found")
         else:
             message = f"NASA API returned an error (status {status})."
-        
-        return None, message
+            return None, APIError(message, status_code=status, error_type="server_error" if status >= 500 else "http_error")
 
     except httpx.RequestError:
-        return None, "Network Error: Could not reach the NASA API."
+        return None, APIError("Network Error: Could not reach the NASA API.", status_code=None, error_type="network_error")
 
 
 # GET ASTRONOMY PICTURES USING NASA'S APOD
@@ -58,9 +85,14 @@ def get_astronomy_picture(date=None, api_key=None):
     data, error = get(NASA_APOD_URL, qparams)
 
     if error:
-        return {
-            "error": error
-        }
+        res = {"error": str(error)}
+        if hasattr(error, "status_code") and error.status_code is not None:
+            res["status_code"] = error.status_code
+        if hasattr(error, "error_type") and error.error_type is not None:
+            res["error_type"] = error.error_type
+        if hasattr(error, "details") and error.details:
+            res["details"] = error.details
+        return res
 
     try:
         return {
@@ -162,6 +194,16 @@ def get_solar_flares(start_date, end_date, api_key=None):
     }
 
 
+def _parse_nasa_images_total_hits(data: dict) -> int | None:
+    try:
+        raw_hits = data.get("collection", {}).get("metadata", {}).get("total_hits")
+        if raw_hits is not None:
+            return int(raw_hits)
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return None
+
+
 def _parse_nasa_images_collection(data: dict) -> list[dict]:
     items = []
     raw_items = data.get("collection", {}).get("items", [])
@@ -203,6 +245,7 @@ def search_nasa_images(query: str, media_type: str = "image", page: int = 1):
 
     try:
         items = _parse_nasa_images_collection(data)
+        total_hits = _parse_nasa_images_total_hits(data)
     except (KeyError, TypeError, AttributeError):
         return {
             "error": "Unexpected NASA Images API response format."
@@ -227,20 +270,27 @@ def search_nasa_images(query: str, media_type: str = "image", page: int = 1):
             if not fb_error and fb_data:
                 try:
                     fb_items = _parse_nasa_images_collection(fb_data)
+                    fb_total_hits = _parse_nasa_images_total_hits(fb_data)
                     if fb_items:
-                        return {
+                        res = {
                             "count": len(fb_items),
                             "items": fb_items,
                             "query": cleaned_query,
                             "original_query": query
                         }
+                        if fb_total_hits is not None:
+                            res["total_hits"] = fb_total_hits
+                        return res
                 except Exception:
                     pass
 
-    return {
+    res = {
         "count": len(items),
         "items": items
     }
+    if total_hits is not None:
+        res["total_hits"] = total_hits
+    return res
 
 
 # GET FULL-DISC EARTH IMAGERY USING NASA'S EPIC CAMERA ON DSCOVR
@@ -257,9 +307,14 @@ def get_epic_earth_imagery(date: str | None = None, api_key: str | None = None):
     data, error = get(url, qparams)
 
     if error:
-        return {
-            "error": error
-        }
+        res = {"error": str(error)}
+        if hasattr(error, "status_code") and error.status_code is not None:
+            res["status_code"] = error.status_code
+        if hasattr(error, "error_type") and error.error_type is not None:
+            res["error_type"] = error.error_type
+        if hasattr(error, "details") and error.details:
+            res["details"] = error.details
+        return res
 
     if not isinstance(data, list):
         return {

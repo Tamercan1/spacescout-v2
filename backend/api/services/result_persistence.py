@@ -116,7 +116,8 @@ class ResultPersistenceService:
                                 order=m.get("order", idx)
                             )
                     
-                    interaction.added_discoveries.add(discovery)
+                    if created:
+                        interaction.added_discoveries.add(discovery)
                     saved_discovery_ids.append(discovery.id)
                     
                 # Update Interaction with the normalized response

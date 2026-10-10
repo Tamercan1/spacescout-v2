@@ -1,4 +1,10 @@
-from ..services.nasa.nasa_services import get_astronomy_picture, search_near_earth_objects, get_solar_flares
+from ..services.nasa.nasa_services import (
+    get_astronomy_picture,
+    search_near_earth_objects,
+    get_solar_flares,
+    search_nasa_images,
+    get_epic_earth_imagery,
+)
 
 # ============================================
 # EVERY TOOL SHOULD GET REGISTERED HERE
@@ -73,6 +79,39 @@ tool_registry = {
                     "in YYYY-MM-DD format."
                 ),
                 "required": True
+            }
+        ]
+    },
+    "search_nasa_images": {
+        "handler": search_nasa_images,
+        "description": (
+            "Search NASA's official image and media archive for space missions (e.g. James Webb, Hubble, Apollo), "
+            "celestial bodies (planets, nebulae, galaxies, black holes), and historical events."
+        ),
+        "parameters": [
+            {
+                "name": "query",
+                "description": "The search keyword or entity to query (e.g. 'James Webb', 'Apollo 11', 'Jupiter').",
+                "required": True
+            },
+            {
+                "name": "page",
+                "description": "Optional page number to retrieve (e.g. 1, 2).",
+                "required": False
+            }
+        ]
+    },
+    "get_epic_earth_imagery": {
+        "handler": get_epic_earth_imagery,
+        "description": (
+            "Retrieve full-disc Earth imagery captured by NASA's EPIC camera on the DSCOVR spacecraft "
+            "at the L1 Lagrange point. If date is omitted, retrieves the latest available imagery."
+        ),
+        "parameters": [
+            {
+                "name": "date",
+                "description": "Optional observation date in YYYY-MM-DD format.",
+                "required": False
             }
         ]
     }

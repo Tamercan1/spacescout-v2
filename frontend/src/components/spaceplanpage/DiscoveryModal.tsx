@@ -54,13 +54,15 @@ function DiscoveryModal({discovery, setSelectedCard}: DiscoveryModalProp) {
                 </div>
                 
                 <ul>
-                    {Object.entries(discovery.facts).map(
-                    ([key, value]) => <li 
-                        key={`${discovery.id}-${key}`}
-                    >
-                        <strong>{key}</strong>: {String(value)}
-                    </li>
-                )}
+                    {discovery.facts && typeof discovery.facts === 'object' && !Array.isArray(discovery.facts) ? (
+                        Object.entries(discovery.facts).map(([key, value]) => (
+                            <li key={`${discovery.id}-${key}`}>
+                                <strong>{key}</strong>: {String(value)}
+                            </li>
+                        ))
+                    ) : (
+                        <li className="soft">No structured facts available</li>
+                    )}
                 </ul>
                 
                 <div className="view-source">

@@ -148,12 +148,39 @@ class TestPersistenceBoundary(TestCase):
         
         ResultPersistenceService.persist_result(interaction2, result2, self.user1.id)
         
-        self.assertEqual(Discovery.objects.count(), 1) # Still 1
-        self.assertEqual(DiscoveryMedia.objects.count(), 1) # Still 1 media
+        self.assertEqual(self.interaction1.added_discoveries.count(), 1)
+        self.assertEqual(interaction2.added_discoveries.count(), 0)
         
         disc.refresh_from_db()
         self.assertEqual(disc.title, "First APOD") # Identity preserved
         self.assertEqual(disc.summary, "Updated summary") # Summary updated
+
+    def test_added_discoveries_isolation_on_repeat_interactions(self):
+        # Turn 1 introduces d1 and d2
+        d1 = DiscoveryData(source="apod", external_id="apod_1", title="APOD 1", summary="summary 1")
+        d2 = DiscoveryData(source="neows", external_id="neo_2", title="Asteroid 2", summary="summary 2")
+        res1 = OrchestratorResult(success=True, discoveries=[d1, d2])
+        ResultPersistenceService.persist_result(self.interaction1, res1, self.user1.id)
+
+        self.assertEqual(self.interaction1.added_discoveries.count(), 2)
+
+        # Turn 2 re-references d1 and introduces new d3
+        int2 = Interaction.objects.create(space_plan=self.plan1, user_prompt="Turn 2")
+        d3 = DiscoveryData(source="donki", external_id="donki_3", title="Flare 3", summary="summary 3")
+        res2 = OrchestratorResult(success=True, discoveries=[d1, d3])
+        ResultPersistenceService.persist_result(int2, res2, self.user1.id)
+
+        # Only d3 was created in Turn 2, so int2.added_discoveries must have count 1
+        self.assertEqual(int2.added_discoveries.count(), 1)
+        self.assertEqual(int2.added_discoveries.first().external_id, "donki_3")
+
+        # Turn 3 only updates/references d1 and d2 without introducing any new discoveries
+        int3 = Interaction.objects.create(space_plan=self.plan1, user_prompt="Turn 3")
+        res3 = OrchestratorResult(success=True, discoveries=[d1, d2])
+        ResultPersistenceService.persist_result(int3, res3, self.user1.id)
+
+        # No discoveries were created in Turn 3, so int3.added_discoveries must have count 0
+        self.assertEqual(int3.added_discoveries.count(), 0)
         
     def test_persistence_ordering(self):
         d1 = DiscoveryData(source="apod", external_id="1", title="First", summary="")

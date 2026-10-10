@@ -69,7 +69,7 @@ class SpacePlanCreateView(generics.CreateAPIView):
         prompt = serializer.validated_data["prompt"]
 
         # Calling the main space plan engine
-        space_plan = run_space_planner(prompt)
+        space_plan = run_space_planner(prompt, user=request.user)
 
         # Save it to db
         saved_plan = save_space_plan(
