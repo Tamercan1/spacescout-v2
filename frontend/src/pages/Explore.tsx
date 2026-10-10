@@ -28,7 +28,15 @@ export default function Explore() {
     const [prompt, setPrompt] = useState("");
     const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
 
-    const creationStartedRef = useRef(false);
+    const isMountedRef = useRef(true);
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    });
+
+    const creationStartedRef = useRef<string | null>(null);
 
     // Progressive animation for creation steps
     useEffect(() => {
@@ -45,17 +53,16 @@ export default function Explore() {
     // Creation flow when initialPrompt is provided via navigation
     useEffect(() => {
         if (!initialPrompt) return;
-        if (creationStartedRef.current) return;
-        creationStartedRef.current = true;
+        if (creationStartedRef.current === initialPrompt) return;
+        creationStartedRef.current = initialPrompt;
 
-        let isMounted = true;
         const runCreate = async () => {
             setIsCreatingNew(true);
             setIsLoading(true);
             setError(null);
             try {
                 const newPlan = await createSpacePlan(initialPrompt);
-                if (!isMounted) return;
+                if (!isMountedRef.current) return;
 
                 localStorage.setItem('active_exploration_id', String(newPlan.id));
                 setPlan(newPlan);
@@ -64,7 +71,7 @@ export default function Explore() {
                 setIsLoading(false);
                 navigate(`/explore/${newPlan.id}`, { replace: true, state: {} });
             } catch (err: unknown) {
-                if (!isMounted) return;
+                if (!isMountedRef.current) return;
                 console.error("Failed to create exploration", err);
                 const errorObj = err as { response?: { data?: { detail?: string } } };
                 setError(errorObj.response?.data?.detail || "Failed to create exploration. Please try again.");
@@ -74,19 +81,20 @@ export default function Explore() {
         };
 
         runCreate();
-
-        return () => {
-            isMounted = false;
-        };
     }, [initialPrompt, navigate]);
 
     // Loading existing plan or handling resumption when no prompt is provided
     useEffect(() => {
         if (initialPrompt) return;
 
-        let isMounted = true;
-
         const loadOrResume = async () => {
+            // If already loaded in state (e.g. from createSpacePlan), keep it without refetching
+            if (id && plan && plan.id === parseInt(id, 10)) {
+                setIsLoading(false);
+                setIsCreatingNew(false);
+                return;
+            }
+
             setIsLoading(true);
             setError(null);
 
@@ -99,14 +107,14 @@ export default function Explore() {
                             getSpacePlan(planId),
                             getInteractions(planId),
                         ]);
-                        if (!isMounted) return;
+                        if (!isMountedRef.current) return;
                         setPlan(planData);
                         setInteractions(interactionData);
                         localStorage.setItem('active_exploration_id', String(planId));
                         setIsLoading(false);
                         return;
                     } catch (err) {
-                        if (!isMounted) return;
+                        if (!isMountedRef.current) return;
                         console.warn(`Exploration ${planId} not found, attempting auto-fallback:`, err);
                         localStorage.removeItem('active_exploration_id');
                     }
@@ -123,7 +131,7 @@ export default function Explore() {
                             getSpacePlan(planId),
                             getInteractions(planId),
                         ]);
-                        if (!isMounted) return;
+                        if (!isMountedRef.current) return;
                         setPlan(planData);
                         setInteractions(interactionData);
                         setIsLoading(false);
@@ -141,7 +149,7 @@ export default function Explore() {
             // Case C: Auto-fallback to user's latest exploration from getSpacePlans()
             try {
                 const plans = await getSpacePlans();
-                if (!isMounted) return;
+                if (!isMountedRef.current) return;
                 if (plans.length > 0) {
                     const latest = plans[0];
                     localStorage.setItem('active_exploration_id', String(latest.id));
@@ -154,24 +162,20 @@ export default function Explore() {
                     setError(null);
                 }
             } catch (err) {
-                if (!isMounted) return;
+                if (!isMountedRef.current) return;
                 console.error("Failed to load explorations fallback:", err);
                 setPlan(null);
                 setInteractions([]);
                 setError(null);
             } finally {
-                if (isMounted) {
+                if (isMountedRef.current) {
                     setIsLoading(false);
                 }
             }
         };
 
         loadOrResume();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [id, initialPrompt, navigate]);
+    }, [id, initialPrompt, navigate, plan]);
 
     const handleRetryCreation = async () => {
         if (!creationPrompt.trim()) return;
