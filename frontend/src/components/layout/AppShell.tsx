@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import AppNavbar from './AppNavbar';
 import AppSidebar from './AppSidebar';
+import AppBottomNav from './AppBottomNav';
 
 export default function AppShell() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -15,6 +16,8 @@ export default function AppShell() {
             <main className="main-content">
                 <Outlet />
             </main>
+
+            <AppBottomNav />
         </div>
     );
 }

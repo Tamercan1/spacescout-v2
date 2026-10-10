@@ -252,8 +252,8 @@ export default function Settings() {
                         ) : (
                             <>
                                 {/* OpenRouter Section */}
-                                <div className="settings-row" style={{ alignItems: 'flex-start', paddingBottom: '24px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, paddingRight: '20px' }}>
+                                <div className="settings-row settings-row--stacked-mobile" style={{ alignItems: 'flex-start', paddingBottom: '24px' }}>
+                                    <div className="settings-row__info">
                                         <div>
                                             <div className="settings-row__label">OpenRouter API Key</div>
                                             <div className="settings-row__sub">Used for AI exploration planning</div>
@@ -266,7 +266,7 @@ export default function Settings() {
                                         )}
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-end', width: '320px' }}>
+                                    <div className="settings-row__control">
                                         <div style={{ width: '100%' }}>
                                             <input
                                                 type="password"
@@ -325,8 +325,8 @@ export default function Settings() {
                                 </div>
 
                                 {/* NASA Section */}
-                                <div className="settings-row" style={{ alignItems: 'flex-start', paddingBottom: '24px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, paddingRight: '20px' }}>
+                                <div className="settings-row settings-row--stacked-mobile" style={{ alignItems: 'flex-start', paddingBottom: '24px' }}>
+                                    <div className="settings-row__info">
                                         <div>
                                             <div className="settings-row__label">NASA API Key</div>
                                             <div className="settings-row__sub">NeoWs, APOD, DONKI, and more</div>
@@ -339,7 +339,7 @@ export default function Settings() {
                                         )}
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-end', width: '320px' }}>
+                                    <div className="settings-row__control">
                                         <div style={{ width: '100%' }}>
                                             <input
                                                 type="password"
@@ -402,8 +402,8 @@ export default function Settings() {
                         <h3 className="settings-section__title">AI Model</h3>
                         <p className="settings-section__sub">Select which OpenRouter model SpaceScout uses for planning. Requires your own key.</p>
 
-                        <div className="settings-row" style={{ alignItems: 'flex-start', paddingBottom: '24px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, paddingRight: '20px' }}>
+                        <div className="settings-row settings-row--stacked-mobile" style={{ alignItems: 'flex-start', paddingBottom: '24px' }}>
+                            <div className="settings-row__info">
                                 <div>
                                     <div className="settings-row__label">Preferred Model</div>
                                     <div className="settings-row__sub" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
@@ -414,28 +414,28 @@ export default function Settings() {
                                                 alignItems: 'center',
                                                 gap: '6px',
                                                 padding: '5px 10px',
-                                                backgroundColor: 'var(--bg-elevated)',
-                                                border: '1px solid var(--border-color)',
+                                                backgroundColor: 'var(--surface-2)',
+                                                border: '1px solid var(--border)',
                                                 borderRadius: '6px',
-                                                color: 'var(--text-color)',
+                                                color: 'var(--text-1)',
                                                 textDecoration: 'none',
                                                 fontSize: '0.75rem',
                                                 fontWeight: 500,
                                                 transition: 'background 0.2s'
                                             }}
-                                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
-                                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-elevated)'}
+                                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--surface-3)'}
+                                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--surface-2)'}
                                             >
                                                 Browse Free Models on OpenRouter <ExternalLink size={12} />
                                             </a>
                                         </div>
                                         {!user?.profile?.preferred_model && (
-                                            <span style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Using default: <strong>openrouter/free</strong></span>
+                                            <span style={{ color: 'var(--text-2)', marginTop: '4px' }}>Using default: <strong>openrouter/free</strong></span>
                                         )}
                                     </div>
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-end', width: '320px' }}>
+                            <div className="settings-row__control">
                                 <div style={{ width: '100%' }}>
                                     <input 
                                         type="text" 

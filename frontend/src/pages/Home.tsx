@@ -97,8 +97,10 @@ export default function Home() {
                                 <div className="home-recent__item-icon">
                                     <Compass size={16} />
                                 </div>
-                                <div className="home-recent__item-title">{plan.title || "Untitled Exploration"}</div>
-                                <div className="home-recent__item-count">{plan.discoveries?.length || 0} discoveries</div>
+                                <div className="home-recent__item-content">
+                                    <div className="home-recent__item-title">{plan.title || "Untitled Exploration"}</div>
+                                    <div className="home-recent__item-count">{plan.discoveries?.length || 0} discoveries</div>
+                                </div>
                             </div>
                         ))}
                     </div>

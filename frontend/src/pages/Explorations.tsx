@@ -48,11 +48,11 @@ export default function Explorations() {
                     </div>
                 </div>
                 <button 
-                    className="btn btn-primary" 
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', fontSize: '0.85rem' }}
-                    onClick={() => navigate('/home')}
+                    className="btn btn-primary exps-page__new-btn" 
+                    onClick={() => navigate('/')}
                 >
-                    <Plus size={16} /> New exploration
+                    <Plus size={15} />
+                    <span>New <span className="hide-on-mobile">exploration</span></span>
                 </button>
             </div>
             

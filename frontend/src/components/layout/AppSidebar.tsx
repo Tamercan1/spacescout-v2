@@ -18,7 +18,7 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
                             <div className="sidebar__head-label">
                                 Explorations
                             </div>
-                            <Link to="/explore" className="sidebar__new">
+                            <Link to="/explore" className="sidebar__new" onClick={closeSidebar}>
                                 <Plus size={14} /> New
                             </Link>
                         </div>
