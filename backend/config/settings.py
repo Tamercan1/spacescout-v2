@@ -43,6 +43,12 @@ ALLOWED_HOSTS = [
     if h.strip()
 ]
 
+# In development mode, allow local network and mobile testing
+if DEBUG:
+    for host in ["192.168.0.115", "0.0.0.0"]:
+        if host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host)
+
 
 # Application definition
 
@@ -157,7 +163,26 @@ REST_FRAMEWORK = {
 
 AUTH_USER_MODEL = 'api.User'
 
+# CORS configuration
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://192.168.0.115:5173",
+]
+
+cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
+if cors_origins_env:
+    for o in cors_origins_env.split(","):
+        stripped = o.strip()
+        if stripped and stripped not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(stripped)
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://192.168.0.115:5173",
+    "http://192.168.0.115:8000",
 ]
