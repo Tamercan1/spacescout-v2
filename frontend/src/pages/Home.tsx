@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
-import { Search, Compass, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Compass } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { createSpacePlan, getSpacePlans } from '../api/planner';
+import { getSpacePlans } from '../api/planner';
 import type { SpacePlan } from '../types/planner';
 
 export default function Home() {
     const navigate = useNavigate();
     const [prompt, setPrompt] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [recentPlans, setRecentPlans] = useState<SpacePlan[]>([]);
     const [isLoadingRecent, setIsLoadingRecent] = useState(true);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const fetchRecent = async () => {
@@ -26,20 +26,21 @@ export default function Home() {
         fetchRecent();
     }, []);
 
-    const handleExplore = async (text: string = prompt) => {
-        if (!text.trim() || isCreating) return;
+    const handleExplore = (text: string = prompt) => {
+        const query = text.trim();
+        if (!query || isSubmitting) return;
         
-        setIsCreating(true);
-        setError(null);
-        
-        try {
-            const plan = await createSpacePlan(text);
-            navigate(`/explore/${plan.id}`);
-        } catch (err: unknown) {
-            console.error("Exploration failed", err);
-            const errorObj = err as { response?: { data?: { detail?: string } } };
-            setError(errorObj.response?.data?.detail || "Failed to create exploration. Please try again.");
-            setIsCreating(false);
+        setIsSubmitting(true);
+        navigate('/explore', { state: { initialPrompt: query } });
+    };
+
+    const handleSelectPrompt = (suggestedText: string) => {
+        setPrompt(suggestedText);
+        if (inputRef.current) {
+            inputRef.current.focus();
+            // Place cursor at the end of the text
+            const len = suggestedText.length;
+            inputRef.current.setSelectionRange(len, len);
         }
     };
 
@@ -58,32 +59,30 @@ export default function Home() {
                 <div className="home-start-box__row">
                     <Search size={20} color="var(--text-3)" />
                     <input 
+                        ref={inputRef}
                         type="text" 
                         className="home-start-box__input" 
                         placeholder="e.g. What asteroids are approaching Earth this year?" 
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        disabled={isCreating}
                     />
                     <button 
                         className="btn btn-primary" 
                         style={{ padding: '8px 18px', borderRadius: '99px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
                         onClick={() => handleExplore()}
-                        disabled={isCreating || !prompt.trim()}
+                        disabled={!prompt.trim() || isSubmitting}
                     >
-                        {isCreating ? <Loader2 size={16} className="spinner" /> : null}
-                        {isCreating ? "Exploring..." : "Explore"}
+                        Explore
                     </button>
                 </div>
-                {error && <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '8px', textAlign: 'left' }}>{error}</div>}
             </div>
 
             <div className="home-prompts">
-                <div className="home-prompt" onClick={() => handleExplore("Near-Earth asteroids")}>Near-Earth asteroids</div>
-                <div className="home-prompt" onClick={() => handleExplore("Solar flares")}>Solar flares</div>
-                <div className="home-prompt" onClick={() => handleExplore("Today's APOD")}>Today's APOD</div>
-                <div className="home-prompt" onClick={() => handleExplore("Exoplanets")}>Exoplanets</div>
+                <div className="home-prompt" onClick={() => handleSelectPrompt("Near-Earth asteroids")}>Near-Earth asteroids</div>
+                <div className="home-prompt" onClick={() => handleSelectPrompt("Solar flares")}>Solar flares</div>
+                <div className="home-prompt" onClick={() => handleSelectPrompt("Today's APOD")}>Today's APOD</div>
+                <div className="home-prompt" onClick={() => handleSelectPrompt("Exoplanets")}>Exoplanets</div>
             </div>
 
             <div className="home-recent">

@@ -1,45 +1,285 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Compass, Layers, MessageSquare, Loader2 } from 'lucide-react';
-import { getSpacePlan, getInteractions, createInteraction } from '../api/planner';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { 
+    Compass, Layers, MessageSquare, Loader2,
+    Sparkles, Orbit, CheckCircle2, AlertCircle, RefreshCw
+} from 'lucide-react';
+import { getSpacePlan, getSpacePlans, createSpacePlan, getInteractions, createInteraction } from '../api/planner';
 import type { SpacePlan, Interaction, Discovery, InteractionType } from '../types/planner';
 import InteractionStream from '../components/explore/InteractionStream';
 import MediaViewer from '../components/common/MediaViewer';
 
 export default function Explore() {
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const navState = location.state as { initialPrompt?: string } | null;
+    const initialPrompt = navState?.initialPrompt;
+
     const [plan, setPlan] = useState<SpacePlan | null>(null);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isCreatingNew, setIsCreatingNew] = useState(Boolean(initialPrompt));
+    const [creationPrompt] = useState(initialPrompt || "");
+    const [creationStep, setCreationStep] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [continueExpanded, setContinueExpanded] = useState(false);
     const [prompt, setPrompt] = useState("");
     const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
-    const navigate = useNavigate();
 
+    const creationStartedRef = useRef(false);
+
+    // Progressive animation for creation steps
     useEffect(() => {
-        const loadData = async () => {
-            if (!id) return;
+        if (!isCreatingNew) return;
+        setCreationStep(0);
+        const timer1 = setTimeout(() => setCreationStep(1), 1600);
+        const timer2 = setTimeout(() => setCreationStep(2), 3400);
+        return () => {
+            clearTimeout(timer1);
+            clearTimeout(timer2);
+        };
+    }, [isCreatingNew]);
+
+    // Creation flow when initialPrompt is provided via navigation
+    useEffect(() => {
+        if (!initialPrompt) return;
+        if (creationStartedRef.current) return;
+        creationStartedRef.current = true;
+
+        let isMounted = true;
+        const runCreate = async () => {
+            setIsCreatingNew(true);
+            setIsLoading(true);
+            setError(null);
             try {
-                setIsLoading(true);
-                const planId = parseInt(id, 10);
-                const [planData, interactionData] = await Promise.all([
-                    getSpacePlan(planId),
-                    getInteractions(planId),
-                ]);
-                setPlan(planData);
-                setInteractions(interactionData);
-            } catch (err) {
-                console.error("Failed to load exploration", err);
-                setError("Failed to load exploration.");
-            } finally {
+                const newPlan = await createSpacePlan(initialPrompt);
+                if (!isMounted) return;
+
+                localStorage.setItem('active_exploration_id', String(newPlan.id));
+                setPlan(newPlan);
+                setInteractions([]);
+                setIsCreatingNew(false);
+                setIsLoading(false);
+                navigate(`/explore/${newPlan.id}`, { replace: true, state: {} });
+            } catch (err: unknown) {
+                if (!isMounted) return;
+                console.error("Failed to create exploration", err);
+                const errorObj = err as { response?: { data?: { detail?: string } } };
+                setError(errorObj.response?.data?.detail || "Failed to create exploration. Please try again.");
+                setIsCreatingNew(false);
                 setIsLoading(false);
             }
         };
 
-        loadData();
-    }, [id]);
+        runCreate();
 
+        return () => {
+            isMounted = false;
+        };
+    }, [initialPrompt, navigate]);
+
+    // Loading existing plan or handling resumption when no prompt is provided
+    useEffect(() => {
+        if (initialPrompt) return;
+
+        let isMounted = true;
+
+        const loadOrResume = async () => {
+            setIsLoading(true);
+            setError(null);
+
+            // Case A: ID is explicitly in URL (/explore/:id)
+            if (id) {
+                const planId = parseInt(id, 10);
+                if (!isNaN(planId)) {
+                    try {
+                        const [planData, interactionData] = await Promise.all([
+                            getSpacePlan(planId),
+                            getInteractions(planId),
+                        ]);
+                        if (!isMounted) return;
+                        setPlan(planData);
+                        setInteractions(interactionData);
+                        localStorage.setItem('active_exploration_id', String(planId));
+                        setIsLoading(false);
+                        return;
+                    } catch (err) {
+                        if (!isMounted) return;
+                        console.warn(`Exploration ${planId} not found, attempting auto-fallback:`, err);
+                        localStorage.removeItem('active_exploration_id');
+                    }
+                }
+            }
+
+            // Case B: Saved ID in localStorage (if different from failed id)
+            const savedId = localStorage.getItem('active_exploration_id');
+            if (savedId && savedId !== id) {
+                const planId = parseInt(savedId, 10);
+                if (!isNaN(planId)) {
+                    try {
+                        const [planData, interactionData] = await Promise.all([
+                            getSpacePlan(planId),
+                            getInteractions(planId),
+                        ]);
+                        if (!isMounted) return;
+                        setPlan(planData);
+                        setInteractions(interactionData);
+                        setIsLoading(false);
+                        navigate(`/explore/${planId}`, { replace: true });
+                        return;
+                    } catch (err) {
+                        console.warn("Saved exploration failed to load, removing:", err);
+                        localStorage.removeItem('active_exploration_id');
+                    }
+                } else {
+                    localStorage.removeItem('active_exploration_id');
+                }
+            }
+
+            // Case C: Auto-fallback to user's latest exploration from getSpacePlans()
+            try {
+                const plans = await getSpacePlans();
+                if (!isMounted) return;
+                if (plans.length > 0) {
+                    const latest = plans[0];
+                    localStorage.setItem('active_exploration_id', String(latest.id));
+                    navigate(`/explore/${latest.id}`, { replace: true });
+                    return;
+                } else {
+                    // User has 0 explorations in total: stay on /explore and show empty state
+                    setPlan(null);
+                    setInteractions([]);
+                    setError(null);
+                }
+            } catch (err) {
+                if (!isMounted) return;
+                console.error("Failed to load explorations fallback:", err);
+                setPlan(null);
+                setInteractions([]);
+                setError(null);
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        loadOrResume();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [id, initialPrompt, navigate]);
+
+    const handleRetryCreation = async () => {
+        if (!creationPrompt.trim()) return;
+        setIsCreatingNew(true);
+        setIsLoading(true);
+        setError(null);
+        setCreationStep(0);
+        try {
+            const newPlan = await createSpacePlan(creationPrompt);
+            localStorage.setItem('active_exploration_id', String(newPlan.id));
+            setPlan(newPlan);
+            setInteractions([]);
+            setIsCreatingNew(false);
+            setIsLoading(false);
+            navigate(`/explore/${newPlan.id}`, { replace: true, state: {} });
+        } catch (err: unknown) {
+            console.error("Failed to create exploration on retry", err);
+            const errorObj = err as { response?: { data?: { detail?: string } } };
+            setError(errorObj.response?.data?.detail || "Failed to create exploration. Please try again.");
+            setIsCreatingNew(false);
+            setIsLoading(false);
+        }
+    };
+
+    // Render multi-stage mission planner during creation
+    if (isCreatingNew) {
+        const steps = [
+            {
+                title: "Analyzing mission query & parameters",
+                desc: "Parsing astronomical targets, time windows, and celestial coordinates",
+                icon: Sparkles
+            },
+            {
+                title: "Querying NASA data archives",
+                desc: "Fetching NeoWs, APOD, DONKI telemetry and scientific mission data",
+                icon: Orbit
+            },
+            {
+                title: "Synthesizing discoveries & planetary intel",
+                desc: "Formulating exploration findings and interactive discovery stream",
+                icon: Layers
+            }
+        ];
+
+        return (
+            <div className="explore-layout">
+                <div className="mission-loading-wrap">
+                    <div className="mission-planner-card">
+                        <div className="mission-planner-badge">
+                            <span className="mission-badge-dot" />
+                            AI MISSION PLANNER
+                        </div>
+
+                        <div className="mission-query-box">
+                            <span className="mission-query-label">EXPLORING</span>
+                            <h2 className="mission-query-text">"{creationPrompt}"</h2>
+                        </div>
+
+                        <div className="mission-steps">
+                            {steps.map((s, idx) => {
+                                const isDone = creationStep > idx;
+                                const isCurrent = creationStep === idx;
+                                const Icon = s.icon;
+
+                                return (
+                                    <div 
+                                        key={idx} 
+                                        className={`mission-step ${isDone ? 'done' : ''} ${isCurrent ? 'active' : ''}`}
+                                    >
+                                        <div className="mission-step-icon">
+                                            {isDone ? (
+                                                <CheckCircle2 size={18} color="var(--green)" />
+                                            ) : isCurrent ? (
+                                                <Loader2 size={18} className="spinner" color="var(--blue)" />
+                                            ) : (
+                                                <Icon size={16} color="var(--text-3)" />
+                                            )}
+                                        </div>
+                                        <div className="mission-step-text">
+                                            <div className="mission-step-title">{s.title}</div>
+                                            <div className="mission-step-desc">{s.desc}</div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Skeletons preview */}
+                    <div className="mission-skeletons">
+                        <div className="skeleton-card">
+                            <div className="skeleton-line skeleton-title" />
+                            <div className="skeleton-box skeleton-media" />
+                            <div className="skeleton-line skeleton-body" />
+                            <div className="skeleton-line skeleton-body short" />
+                        </div>
+                        <div className="skeleton-card hide-on-mobile">
+                            <div className="skeleton-line skeleton-title" />
+                            <div className="skeleton-box skeleton-media" />
+                            <div className="skeleton-line skeleton-body" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Render loading spinner for existing plan fetching
     if (isLoading) {
         return (
             <div className="explore-layout">
@@ -51,14 +291,69 @@ export default function Explore() {
         );
     }
 
-    if (error || !plan) {
+    // Render creation error or general failure
+    if (error) {
         return (
             <div className="explore-layout">
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', color: 'var(--text-3)', fontSize: '0.9rem' }}>
-                    <div>{error || "Exploration not found."}</div>
-                    <button className="btn btn-ghost" onClick={() => navigate('/explorations')}>
-                        Back to Explorations
-                    </button>
+                <div className="explore-empty-wrap">
+                    <div className="explore-empty-card error">
+                        <div className="explore-empty-badge error">
+                            <AlertCircle size={13} />
+                            <span>MISSION FAILED</span>
+                        </div>
+                        <div className="explore-empty-icon-wrap error">
+                            <AlertCircle size={28} />
+                        </div>
+                        <h2 className="explore-empty-title">Exploration Failed</h2>
+                        <p className="explore-empty-desc">
+                            {error || "An unexpected error occurred while analyzing the cosmos."}
+                        </p>
+                        <div className="explore-empty-actions">
+                            {creationPrompt ? (
+                                <button className="btn btn-primary" onClick={handleRetryCreation}>
+                                    <RefreshCw size={15} /> Try Again
+                                </button>
+                            ) : (
+                                <button className="btn btn-primary" onClick={() => navigate('/')}>
+                                    <Compass size={15} /> Start Mission on Home
+                                </button>
+                            )}
+                            <button className="btn btn-secondary" onClick={() => navigate('/explorations')}>
+                                <Layers size={15} /> Browse Archive
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Render empty state when user has no active plan
+    if (!plan) {
+        return (
+            <div className="explore-layout">
+                <div className="explore-empty-wrap">
+                    <div className="explore-empty-card">
+                        <div className="explore-empty-badge">
+                            <span className="mission-badge-dot" />
+                            <span>MISSION HUB</span>
+                        </div>
+                        <div className="explore-empty-icon-wrap">
+                            <Compass size={32} />
+                        </div>
+                        <h2 className="explore-empty-title">No Active Exploration</h2>
+                        <p className="explore-empty-desc">
+                            Launch an AI-guided space exploration from Home, or select an existing mission from your archive to continue.
+                        </p>
+                        <div className="explore-empty-actions">
+                            <button className="btn btn-primary" onClick={() => navigate('/')}>
+                                <Compass size={15} /> Start Mission on Home
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => navigate('/explorations')}>
+                                <Layers size={15} /> Browse Archive
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
