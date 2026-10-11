@@ -472,6 +472,51 @@ class TestOrchestrator(unittest.TestCase):
         # Strict LLM-only policy: remains empty string if LLM fails
         self.assertEqual(result.discoveries[0].why_interesting, "")
 
+    def test_synthesis_strips_duplicate_image_embeds_when_discoveries_present(self):
+        from api.engine.contracts import DiscoveryData
+        fake_tool = FakeTool()
+        disc = DiscoveryData(
+            source="apod",
+            external_id="apod_2026",
+            title="Ice Fishing for Cosmic Neutrinos",
+            summary="Scientists melting ice holes.",
+            source_url="https://assets.science.nasa.gov/photo.jpg",
+            media=[{"url": "https://assets.science.nasa.gov/photo.jpg", "media_type": "image"}]
+        )
+        fake_tool.execute_mock.return_value = ToolResult(
+            tool_name="fake_tool",
+            result_type="apod",
+            data={"status": "ok"},
+            discoveries=[disc],
+            metadata={"success": True}
+        )
+        self.registry.register(fake_tool)
+
+        raw_llm_response = (
+            "I've added the Astronomy Picture of the Day to your discoveries.\n\n"
+            "Image:\n"
+            "![Ice Fishing](https://assets.science.nasa.gov/photo.jpg)\n\n"
+            "This polar observatory monitors high-energy cosmic neutrinos."
+        )
+
+        self.provider.generate.side_effect = [
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="fake_tool", arguments={"arg1": "value"})]
+            ),
+            LLMResponse(content=raw_llm_response),
+            LLMResponse(content='{"apod_2026": "A massive neutrino detector frozen in Antarctic ice."}')
+        ]
+
+        result = self.orchestrator.execute(self.context)
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.discoveries), 1)
+        self.assertNotIn("![Ice Fishing]", result.llm_content)
+        self.assertNotIn("https://assets.science.nasa.gov/photo.jpg", result.llm_content)
+        self.assertNotIn("Image:", result.llm_content)
+        self.assertIn("I've added the Astronomy Picture of the Day to your discoveries.", result.llm_content)
+        self.assertIn("This polar observatory monitors high-energy cosmic neutrinos.", result.llm_content)
+
     def test_multi_turn_history_message_building_and_current_prompt_exact_once(self):
         past1 = PreviousInteractionContext(
             interaction_id="past-1",

@@ -79,6 +79,11 @@ export default function InteractionResult({ interaction }: InteractionResultProp
         // render the streamlined AI response card with the discovery badge instead of duplicating
         // full-sized tool cards in the stream (the full discovery card is already visible in the feed).
         if (synthesis && addedCount > 0 && typedResponse.result_type !== "analysis") {
+            const cleanSynthesis = synthesis
+                .replace(/!\[.*?\]\(.*?\)/g, '')
+                .replace(/^\s*(?:image|photo|media):\s*$/gim, '')
+                .trim();
+
             const syntheticAnalysis: AnalysisResult = {
                 result_type: "analysis",
                 content: {
@@ -87,7 +92,7 @@ export default function InteractionResult({ interaction }: InteractionResultProp
                     sections: [
                         {
                             heading: "Response",
-                            content: synthesis
+                            content: cleanSynthesis
                         }
                     ]
                 },

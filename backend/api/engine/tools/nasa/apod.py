@@ -80,7 +80,7 @@ class APODTool(BaseTool):
         response = get_astronomy_picture(date=date, api_key=api_key)
 
         # Classified fallback: Only trigger fallback for confirmed date-related unavailability / out-of-range dates.
-        # NEVER mask authentication failures (401/403), rate limits (429), not-found (404), 5xx server errors, or network timeouts.
+        # NEVER mask authentication failures (401/403), rate limits (429), not-found (404 for past dates), 5xx server errors, or network timeouts.
         if "error" in response and date:
             error_msg = str(response.get("error", ""))
             status_code = response.get("status_code")
@@ -88,19 +88,21 @@ class APODTool(BaseTool):
             details = str(response.get("details", ""))
             combined_err = f"{error_msg} {details}".lower()
 
+            today_str = datetime.now().date().isoformat()
+            is_future_or_out_of_range = (date > today_str) or (date < "1995-06-16")
+
             is_non_fallback_error = (
-                status_code in [401, 403, 404, 429] or
+                status_code in [401, 403, 429] or
+                (status_code == 404 and not is_future_or_out_of_range) or
                 (status_code is not None and status_code >= 500) or
-                error_type in ["auth_error", "rate_limit", "network_error", "not_found", "server_error"] or
+                error_type in ["auth_error", "rate_limit", "network_error", "server_error"] or
+                (error_type == "not_found" and not is_future_or_out_of_range) or
                 "rejected" in combined_err or
                 "rate limit" in combined_err or
                 "network error" in combined_err
             )
 
             if not is_non_fallback_error:
-                today_str = datetime.now().date().isoformat()
-                is_future_or_out_of_range = (date > today_str) or (date < "1995-06-16")
-
                 is_date_error_msg = any(phrase in combined_err for phrase in [
                     "date must be between",
                     "does not match format",
@@ -108,7 +110,10 @@ class APODTool(BaseTool):
                     "out of range",
                     "future date",
                     "no picture available",
-                ]) or (status_code == 400 and bool(re.search(r"\bdate\b", combined_err)))
+                    "apod not found",
+                    "apod_basic_not_found",
+                    "invalid parameter(s): date",
+                ]) or (status_code in [400, 404] and bool(re.search(r"\bdate\b", combined_err)))
 
                 if is_future_or_out_of_range or is_date_error_msg:
                     fallback_response = get_astronomy_picture(date=None, api_key=api_key)
@@ -144,6 +149,9 @@ class APODTool(BaseTool):
             facts["Actual Date"] = actual_date
             facts["Fallback Applied"] = "Yes"
 
+        source_url = response.get("permalink") or response.get("image_url", "")
+        media_url = response.get("image_url", "")
+
         discovery = DiscoveryData(
             source=self.name,
             external_id=actual_date,
@@ -151,10 +159,10 @@ class APODTool(BaseTool):
             summary=explanation,
             why_interesting="",
             date=actual_date,
-            source_url=response.get("image_url", ""),
+            source_url=source_url,
             facts=facts,
             media=[{
-                "url": response.get("image_url", ""),
+                "url": media_url,
                 "media_type": response.get("media_type", "image"),
                 "type": response.get("media_type", "image"),
                 "is_primary": True
@@ -168,8 +176,9 @@ class APODTool(BaseTool):
                 "title": response.get("title", ""),
                 "date": actual_date or "",
                 "explanation": explanation,
-                "media_url": response.get("image_url", ""),
+                "media_url": media_url,
                 "media_type": response.get("media_type", ""),
+                "permalink": response.get("permalink", ""),
                 "fallback_applied": fallback_applied,
                 "requested_date": requested_date
             },

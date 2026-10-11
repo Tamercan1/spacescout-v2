@@ -267,6 +267,86 @@ class TestNASATools(TestCase):
         self.assertFalse(result.metadata["fallback_applied"])
         self.assertEqual(result.result_type, "error")
 
+    @patch("api.services.nasa.nasa_services.get")
+    def test_get_astronomy_picture_latest_apod_basic(self, mock_nasa_get):
+        from api.services.nasa.nasa_services import get_astronomy_picture, NASA_APOD_BASIC_URL
+        mock_nasa_get.return_value = ([
+            {
+                "date": "2026-10-11",
+                "title": "Ice Fishing for Cosmic Neutrinos",
+                "explanation": "<strong>Explanation:</strong> Scientists are melting holes in the ice.",
+                "hdurl": "https://assets.science.nasa.gov/image.jpg",
+                "url": "https://science.nasa.gov/image-article/sample",
+                "media_type": "image",
+                "permalink": "https://science.nasa.gov/image-article/sample"
+            }
+        ], None)
+
+        res = get_astronomy_picture()
+        mock_nasa_get.assert_called_once_with(NASA_APOD_BASIC_URL, {"per_page": 1})
+        self.assertEqual(res["date"], "2026-10-11")
+        self.assertEqual(res["title"], "Ice Fishing for Cosmic Neutrinos")
+        self.assertEqual(res["explanation"], "Scientists are melting holes in the ice.")
+        self.assertEqual(res["image_url"], "https://assets.science.nasa.gov/image.jpg")
+        self.assertEqual(res["media_type"], "image")
+        self.assertEqual(res["permalink"], "https://science.nasa.gov/image-article/sample")
+
+    @patch("api.services.nasa.nasa_services.get")
+    def test_get_astronomy_picture_date_converts_to_yymmdd(self, mock_nasa_get):
+        from api.services.nasa.nasa_services import get_astronomy_picture, NASA_APOD_BASIC_URL
+        mock_nasa_get.return_value = ({
+            "date": "2024-10-10",
+            "title": "Five Bright Comets",
+            "explanation": "Comets observed by SOHO.",
+            "hdurl": "https://assets.science.nasa.gov/comet.jpg",
+            "url": "https://science.nasa.gov/image-article/comet",
+            "media_type": "image"
+        }, None)
+
+        res = get_astronomy_picture(date="2024-10-10")
+        mock_nasa_get.assert_called_once_with(f"{NASA_APOD_BASIC_URL}/241010", {})
+        self.assertEqual(res["date"], "2024-10-10")
+        self.assertEqual(res["title"], "Five Bright Comets")
+        self.assertEqual(res["image_url"], "https://assets.science.nasa.gov/comet.jpg")
+
+    @patch("api.services.nasa.nasa_services.get")
+    def test_get_astronomy_picture_video_extracts_iframe_embed(self, mock_nasa_get):
+        from api.services.nasa.nasa_services import get_astronomy_picture
+        mock_nasa_get.return_value = ({
+            "date": "2021-02-23",
+            "title": "Video: Perseverance Landing",
+            "explanation": "<b>Explanation:</b> Watch the rover descend.",
+            "media_type": "video",
+            "url": "https://science.nasa.gov/image-article/video-page",
+            "basic_html": '<iframe src="//www.youtube.com/embed/4czjS9h4Fpg?rel=0"></iframe>'
+        }, None)
+
+        res = get_astronomy_picture(date="2021-02-23")
+        self.assertEqual(res["media_type"], "video")
+        self.assertEqual(res["image_url"], "https://www.youtube.com/embed/4czjS9h4Fpg?rel=0")
+        self.assertEqual(res["explanation"], "Watch the rover descend.")
+
+    @patch("api.services.nasa.nasa_services.get")
+    def test_get_astronomy_picture_fallback_to_legacy(self, mock_nasa_get):
+        from api.services.nasa.nasa_services import get_astronomy_picture, NASA_APOD_BASIC_URL, NASA_APOD_LEGACY_URL, APIError
+        mock_nasa_get.side_effect = [
+            (None, APIError("Server Error", status_code=500, error_type="server_error")),
+            ({
+                "date": "2024-10-10",
+                "title": "Legacy SOHO",
+                "explanation": "From legacy endpoint.",
+                "url": "https://legacy.nasa.gov/soho.jpg",
+                "media_type": "image"
+            }, None)
+        ]
+
+        res = get_astronomy_picture(date="2024-10-10", api_key="my_key")
+        self.assertEqual(mock_nasa_get.call_count, 2)
+        mock_nasa_get.assert_any_call(f"{NASA_APOD_BASIC_URL}/241010", {})
+        mock_nasa_get.assert_any_call(NASA_APOD_LEGACY_URL, {"api_key": "my_key", "date": "2024-10-10"})
+        self.assertEqual(res["title"], "Legacy SOHO")
+        self.assertEqual(res["image_url"], "https://legacy.nasa.gov/soho.jpg")
+
     @patch("api.engine.tools.nasa.neows.get_provider_key", return_value="mock_nasa_key")
     @patch("api.engine.tools.nasa.neows.search_near_earth_objects")
     def test_neows_tool_success(self, mock_search, mock_get_provider_key):

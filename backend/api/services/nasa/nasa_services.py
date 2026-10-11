@@ -1,3 +1,5 @@
+from datetime import datetime
+import html
 import httpx
 import json
 import os
@@ -8,7 +10,9 @@ load_dotenv()
 
 API_KEY = os.getenv("NASA_API_KEY")
 
-NASA_APOD_URL = "https://api.nasa.gov/planetary/apod"
+NASA_APOD_BASIC_URL = "https://science.nasa.gov/wp-json/wp/v2/apod-basic"
+NASA_APOD_LEGACY_URL = "https://api.nasa.gov/planetary/apod"
+NASA_APOD_URL = NASA_APOD_BASIC_URL
 NASA_NEO_URL = "https://api.nasa.gov/neo/rest/v1/feed"
 NASA_FLR_URL = "https://ccmc.gsfc.nasa.gov/DONKI-API/get/FLR"
 NASA_IMAGES_SEARCH_URL = "https://images-api.nasa.gov/search"
@@ -63,8 +67,18 @@ def get(url, params, timeout=15):
             message = f"NASA API returned an error (status 400): {detail}" if detail else f"NASA API returned an error (status 400)."
             return None, APIError(message, status_code=400, error_type="bad_request", details=detail)
         elif status == 404:
-            message = f"NASA API returned an error (status {status})."
-            return None, APIError(message, status_code=404, error_type="not_found")
+            detail = ""
+            try:
+                err_json = err.response.json()
+                if isinstance(err_json, dict):
+                    detail = err_json.get("msg") or err_json.get("message") or err_json.get("error") or err_json.get("code") or ""
+            except Exception:
+                try:
+                    detail = err.response.text.strip()[:200]
+                except Exception:
+                    detail = ""
+            message = f"NASA API returned an error (status 404): {detail}" if detail else f"NASA API returned an error (status 404)."
+            return None, APIError(message, status_code=404, error_type="not_found", details=detail)
         else:
             message = f"NASA API returned an error (status {status})."
             return None, APIError(message, status_code=status, error_type="server_error" if status >= 500 else "http_error")
@@ -73,40 +87,132 @@ def get(url, params, timeout=15):
         return None, APIError("Network Error: Could not reach the NASA API.", status_code=None, error_type="network_error")
 
 
-# GET ASTRONOMY PICTURES USING NASA'S APOD
-def get_astronomy_picture(date=None, api_key=None):
-    qparams = {
-        "api_key": api_key or API_KEY
+def clean_apod_explanation(raw_text: str) -> str:
+    """
+    Cleans raw HTML explanation from NASA Science APOD API into clean text.
+    Removes leading 'Explanation:' headings, HTML tags, unescapes entities,
+    and normalizes whitespace.
+    """
+    if not raw_text:
+        return ""
+    cleaned = re.sub(
+        r"^(?:<p>\s*)?<(?:strong|b)>Explanation:?\s*</(?:strong|b)>\s*",
+        "",
+        raw_text.strip(),
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    cleaned = html.unescape(cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _parse_apod_item(data: dict) -> dict:
+    """
+    Normalizes a raw APOD record from science.nasa.gov or legacy api.nasa.gov.
+    """
+    date_val = data.get("date")
+    title_val = data.get("title", "")
+    explanation_val = clean_apod_explanation(data.get("explanation", ""))
+    media_type_val = data.get("media_type", "image")
+
+    image_url = ""
+    if media_type_val == "video":
+        basic_html = data.get("basic_html", "")
+        embed_match = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', basic_html)
+        if embed_match:
+            embed_url = embed_match.group(1)
+            if embed_url.startswith("//"):
+                embed_url = f"https:{embed_url}"
+            image_url = embed_url
+        else:
+            image_url = data.get("url") or data.get("hdurl") or ""
+    else:
+        image_url = data.get("hdurl") or data.get("url") or ""
+
+    permalink = data.get("permalink") or data.get("url") or ""
+
+    return {
+        "date": date_val,
+        "title": title_val,
+        "explanation": explanation_val,
+        "image_url": image_url,
+        "media_type": media_type_val,
+        "source": "NASA",
+        "permalink": permalink,
+        "hdurl": data.get("hdurl") or "",
+        "url": data.get("url") or image_url,
     }
 
+
+# GET ASTRONOMY PICTURES USING NASA'S APOD
+def get_astronomy_picture(date=None, api_key=None):
+    """
+    Retrieves the Astronomy Picture of the Day.
+    Uses the new NASA Science APOD API (https://science.nasa.gov/wp-json/wp/v2/apod-basic).
+    Falls back gracefully to legacy API if the primary service encounters server/network issues.
+    """
+    url = NASA_APOD_BASIC_URL
+    qparams = {}
+
     if date:
-        qparams["date"] = date
+        date_clean = str(date).strip()
+        today_str = datetime.now().date().isoformat()
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", date_clean):
+            if date_clean > today_str or date_clean < "1995-06-16":
+                return {
+                    "error": f"NASA API returned an error (status 400): Date must be between Jun 16, 1995 and {today_str}.",
+                    "status_code": 400,
+                    "error_type": "bad_request",
+                    "details": f"Date must be between Jun 16, 1995 and {today_str}."
+                }
+            parts = date_clean.split("-")
+            yymmdd = f"{parts[0][-2:]}{parts[1]}{parts[2]}"
+            url = f"{NASA_APOD_BASIC_URL}/{yymmdd}"
+        elif re.match(r"^\d{6}$", date_clean):
+            url = f"{NASA_APOD_BASIC_URL}/{date_clean}"
+        else:
+            url = f"{NASA_APOD_BASIC_URL}/{date_clean}"
+    else:
+        qparams["per_page"] = 1
 
-    data, error = get(NASA_APOD_URL, qparams)
+    data, error = get(url, qparams)
 
-    if error:
-        res = {"error": str(error)}
-        if hasattr(error, "status_code") and error.status_code is not None:
-            res["status_code"] = error.status_code
-        if hasattr(error, "error_type") and error.error_type is not None:
-            res["error_type"] = error.error_type
-        if hasattr(error, "details") and error.details:
-            res["details"] = error.details
-        return res
+    if not error and data is not None:
+        try:
+            if isinstance(data, list):
+                if not data:
+                    return {"error": "NASA APOD returned an empty list.", "status_code": 404, "error_type": "not_found"}
+                item = data[0]
+            elif isinstance(data, dict):
+                item = data
+            else:
+                return {"error": "Unexpected NASA API response format.", "status_code": 200, "error_type": "invalid_format"}
 
-    try:
-        return {
-            "date": data["date"],
-            "title": data["title"],
-            "explanation": data["explanation"],
-            "image_url": data["url"],
-            "media_type": data["media_type"],
-            "source": "NASA"
-        }
-    except KeyError:
-        return {
-            "error": "Unexpected NASA API response."
-        }
+            return _parse_apod_item(item)
+        except (KeyError, TypeError) as e:
+            return {"error": f"Unexpected NASA API response schema: {e}", "error_type": "invalid_format"}
+
+    # Fallback to legacy endpoint if primary failed with network/server error and key is present
+    key = api_key or API_KEY
+    if key and (error is None or getattr(error, "status_code", 500) >= 500 or getattr(error, "error_type", "") == "network_error"):
+        legacy_params = {"api_key": key}
+        if date:
+            legacy_params["date"] = date
+        legacy_data, legacy_error = get(NASA_APOD_LEGACY_URL, legacy_params)
+        if not legacy_error and legacy_data is not None:
+            try:
+                return _parse_apod_item(legacy_data)
+            except Exception:
+                pass
+
+    res = {"error": str(error)}
+    if hasattr(error, "status_code") and error.status_code is not None:
+        res["status_code"] = error.status_code
+    if hasattr(error, "error_type") and error.error_type is not None:
+        res["error_type"] = error.error_type
+    if hasattr(error, "details") and error.details:
+        res["details"] = error.details
+    return res
 
 
 # GET NEAR EART OBJECTS USING NASA'S NEOWS

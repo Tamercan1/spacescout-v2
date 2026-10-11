@@ -7,7 +7,7 @@ interface ApodResultCardProps {
 }
 
 export default function ApodResultCard({ result }: ApodResultCardProps) {
-    const { title, date, explanation, media_url, media_type } = result.content;
+    const { title, date, explanation, media_url, media_type, permalink } = result.content;
     const failures = result.metadata?.tool_failures as Array<{ tool: string; error: string }> | undefined;
     const [expanded, setExpanded] = useState(false);
 
@@ -43,7 +43,7 @@ export default function ApodResultCard({ result }: ApodResultCardProps) {
                     mediaType={media_type}
                     title={title}
                     caption={title}
-                    sourceUrl={`https://apod.nasa.gov/apod/ap${date ? date.replace(/-/g, '').slice(2) : ''}.html`}
+                    sourceUrl={permalink || `https://apod.nasa.gov/apod/ap${date ? date.replace(/-/g, '').slice(2) : ''}.html`}
                 />
             )}
 

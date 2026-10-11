@@ -101,6 +101,7 @@ export interface ApodResult {
         explanation: string;
         media_url: string | null;
         media_type: string | null;
+        permalink?: string | null;
     };
     discoveries: number[];
     metadata?: Record<string, unknown>;
