@@ -1,17 +1,23 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useCredentials } from "../context/CredentialsContext";
 import { User, Key, Settings as SettingsIcon, CheckCircle2, AlertCircle, RefreshCw, XCircle, ExternalLink } from 'lucide-react';
-import { getCredentials, saveCredential, deleteCredential, validateCredential } from "../api/credentials";
 import { updateUserProfile } from "../api/user";
 import type { ProviderCredential } from "../types/credentials";
 
 export default function Settings() {
     const { user, updateUser } = useAuth();
+    const {
+        credentials,
+        isLoading: credsLoading,
+        fetchCredentials,
+        saveCredential: saveCred,
+        deleteCredential: deleteCred,
+        validateCredential: validateCred,
+    } = useCredentials();
     const [activeTab, setActiveTab] = useState("account");
 
-    // BYOK State
-    const [credentials, setCredentials] = useState<ProviderCredential[]>([]);
-    const [credsLoading, setCredsLoading] = useState(false);
+    // BYOK Local Input State
     const [openRouterKey, setOpenRouterKey] = useState("");
     const [nasaKey, setNasaKey] = useState("");
     const [loadingProvider, setLoadingProvider] = useState<Record<string, string>>({});
@@ -44,34 +50,20 @@ export default function Settings() {
         }
     };
 
-    const fetchCredentials = async () => {
-        setCredsLoading(true);
-        try {
-            const data = await getCredentials();
-            setCredentials(data);
-        } catch {
-            console.error("Failed to load credentials");
-        } finally {
-            setCredsLoading(false);
-        }
-    };
-
     useEffect(() => {
         if (activeTab === "credentials") {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             fetchCredentials();
         }
-    }, [activeTab]);
+    }, [activeTab, fetchCredentials]);
 
     const handleSave = async (provider: string, key: string) => {
         if (!key.trim()) return;
         setLoadingProvider(prev => ({ ...prev, [provider]: 'saving' }));
         setProviderError(prev => ({ ...prev, [provider]: null }));
         try {
-            await saveCredential(provider, key);
+            await saveCred(provider, key);
             if (provider === 'openrouter') setOpenRouterKey("");
             if (provider === 'nasa') setNasaKey("");
-            await fetchCredentials();
         } catch {
             setProviderError(prev => ({ ...prev, [provider]: "Failed to save API key." }));
         } finally {
@@ -84,8 +76,7 @@ export default function Settings() {
         setLoadingProvider(prev => ({ ...prev, [provider]: 'deleting' }));
         setProviderError(prev => ({ ...prev, [provider]: null }));
         try {
-            await deleteCredential(provider);
-            await fetchCredentials();
+            await deleteCred(provider);
         } catch {
             setProviderError(prev => ({ ...prev, [provider]: "Failed to delete API key." }));
         } finally {
@@ -97,8 +88,7 @@ export default function Settings() {
         setLoadingProvider(prev => ({ ...prev, [provider]: 'validating' }));
         setProviderError(prev => ({ ...prev, [provider]: null }));
         try {
-            await validateCredential(provider);
-            await fetchCredentials();
+            await validateCred(provider);
         } catch (err: unknown) {
             const error = err as { response?: { status: number, data?: { detail?: string } } };
             if (error.response?.status === 502) {
@@ -106,7 +96,7 @@ export default function Settings() {
             } else {
                 setProviderError(prev => ({ ...prev, [provider]: "Failed to validate API key." }));
             }
-            await fetchCredentials();
+            await fetchCredentials(true);
         } finally {
             setLoadingProvider(prev => ({ ...prev, [provider]: '' }));
         }

@@ -1,46 +1,16 @@
-import { useState, useEffect } from 'react';
 import { Clock, RotateCcw, Plus, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getSpacePlans, updateSpacePlan } from '../api/planner';
+import { usePlans } from '../context/PlansContext';
 import type { SpacePlan } from '../types/planner';
 
 export default function Explorations() {
     const navigate = useNavigate();
-    const [plans, setPlans] = useState<SpacePlan[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const fetchPlans = async () => {
-        try {
-            setIsLoading(true);
-            const data = await getSpacePlans();
-            setPlans(data);
-        } catch (err) {
-            console.error(err);
-            setError("Failed to load explorations.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchPlans();
-
-        const handleUpdate = () => {
-            fetchPlans();
-        };
-        window.addEventListener('spacescout:plans_updated', handleUpdate);
-        return () => {
-            window.removeEventListener('spacescout:plans_updated', handleUpdate);
-        };
-    }, []);
+    const { plans, isLoading, error, updatePlan } = usePlans();
 
     const toggleArchive = async (e: React.MouseEvent, plan: SpacePlan) => {
         e.stopPropagation();
         try {
-            const updated = await updateSpacePlan(plan.id, { is_archived: !plan.is_archived });
-            setPlans(prev => prev.map(p => p.id === plan.id ? updated : p));
-            window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
+            await updatePlan(plan.id, { is_archived: !plan.is_archived });
         } catch (err) {
             console.error("Failed to update archive status", err);
         }

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Trash2, Compass, AlertTriangle, X, RefreshCw } from 'lucide-react';
-import { getSpacePlans, deleteSpacePlan } from '../../api/planner';
+import { usePlans } from '../../context/PlansContext';
 import type { SpacePlan } from '../../types/planner';
 
 interface AppSidebarProps {
@@ -63,9 +63,7 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const [plans, setPlans] = useState<SpacePlan[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { plans, isLoading, error, deletePlan, fetchPlans } = usePlans();
     const [planToDelete, setPlanToDelete] = useState<SpacePlan | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
@@ -83,35 +81,6 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
             }
         }
     }, []);
-
-    // Fetch user's explorations
-    const fetchPlans = useCallback(async () => {
-        try {
-            setError(null);
-            const data = await getSpacePlans();
-            setPlans(data);
-        } catch (err) {
-            console.error("Failed to load exploration history", err);
-            setError("Could not load history");
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchPlans();
-    }, [fetchPlans]);
-
-    // Listen for custom plan updates across the app (creation, deletion, interaction updates)
-    useEffect(() => {
-        const handleUpdate = () => {
-            fetchPlans();
-        };
-        window.addEventListener('spacescout:plans_updated', handleUpdate);
-        return () => {
-            window.removeEventListener('spacescout:plans_updated', handleUpdate);
-        };
-    }, [fetchPlans]);
 
     // Handle drag-to-resize on desktop
     const handleResizeStart = (e: React.MouseEvent) => {
@@ -167,11 +136,7 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
         if (!planToDelete) return;
         setIsDeleting(true);
         try {
-            await deleteSpacePlan(planToDelete.id);
-            setPlans(prev => prev.filter(p => p.id !== planToDelete.id));
-
-            // Notify other components (like Explorations page)
-            window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
+            await deletePlan(planToDelete.id);
 
             // If the deleted exploration is currently open, navigate to /explore fresh
             if (location.pathname === `/explore/${planToDelete.id}`) {
@@ -286,7 +251,7 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
                                 <p style={{ marginBottom: '8px' }}>{error}</p>
                                 <button 
                                     className="btn btn-ghost btn-sm" 
-                                    onClick={() => { setIsLoading(true); fetchPlans(); }}
+                                    onClick={() => fetchPlans(true)}
                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                                 >
                                     <RefreshCw size={12} /> Retry

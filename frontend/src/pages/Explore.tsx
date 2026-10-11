@@ -4,7 +4,8 @@ import {
     Compass, Layers, MessageSquare, Loader2,
     Sparkles, Orbit, CheckCircle2, AlertCircle, RefreshCw
 } from 'lucide-react';
-import { getSpacePlan, getSpacePlans, createSpacePlan, getInteractions, createInteraction } from '../api/planner';
+import { getSpacePlan, createSpacePlan, createInteraction } from '../api/planner';
+import { usePlans } from '../context/PlansContext';
 import type { SpacePlan, Interaction, Discovery, InteractionType } from '../types/planner';
 import InteractionStream from '../components/explore/InteractionStream';
 import MediaViewer from '../components/common/MediaViewer';
@@ -13,6 +14,15 @@ export default function Explore() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
+
+    const {
+        plans,
+        isLoading: isPlansLoading,
+        getPlanById,
+        getInteractionsForPlan,
+        addPlan,
+        addInteractionToCache,
+    } = usePlans();
 
     const navState = location.state as { initialPrompt?: string; startFresh?: boolean } | null;
     const initialPrompt = navState?.initialPrompt;
@@ -30,6 +40,7 @@ export default function Explore() {
     const [emptyPrompt, setEmptyPrompt] = useState("");
     const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
 
+    const loadedPlanIdRef = useRef<number | null>(null);
     const isMountedRef = useRef(true);
     useEffect(() => {
         isMountedRef.current = true;
@@ -56,6 +67,7 @@ export default function Explore() {
     useEffect(() => {
         if (!startFresh) return;
         localStorage.removeItem('active_exploration_id');
+        loadedPlanIdRef.current = null;
         setPlan(null);
         setInteractions([]);
         setIsLoading(false);
@@ -78,6 +90,8 @@ export default function Explore() {
                 if (!isMountedRef.current) return;
 
                 localStorage.setItem('active_exploration_id', String(newPlan.id));
+                addPlan(newPlan);
+                loadedPlanIdRef.current = newPlan.id;
                 setPlan(newPlan);
                 setInteractions([]);
                 setIsCreatingNew(false);
@@ -95,15 +109,15 @@ export default function Explore() {
         };
 
         runCreate();
-    }, [initialPrompt, navigate]);
+    }, [initialPrompt, navigate, addPlan]);
 
     // Loading existing plan or handling resumption when no prompt is provided
     useEffect(() => {
         if (initialPrompt || startFresh) return;
 
         const loadOrResume = async () => {
-            // If already loaded in state (e.g. from createSpacePlan), keep it without refetching
-            if (id && plan && plan.id === parseInt(id, 10)) {
+            // If already loaded in state, keep it without refetching
+            if (id && loadedPlanIdRef.current === parseInt(id, 10)) {
                 setIsLoading(false);
                 setIsCreatingNew(false);
                 return;
@@ -118,10 +132,11 @@ export default function Explore() {
                 if (!isNaN(planId)) {
                     try {
                         const [planData, interactionData] = await Promise.all([
-                            getSpacePlan(planId),
-                            getInteractions(planId),
+                            getPlanById(planId),
+                            getInteractionsForPlan(planId),
                         ]);
                         if (!isMountedRef.current) return;
+                        loadedPlanIdRef.current = planId;
                         setPlan(planData);
                         setInteractions(interactionData);
                         localStorage.setItem('active_exploration_id', String(planId));
@@ -142,10 +157,11 @@ export default function Explore() {
                 if (!isNaN(planId)) {
                     try {
                         const [planData, interactionData] = await Promise.all([
-                            getSpacePlan(planId),
-                            getInteractions(planId),
+                            getPlanById(planId),
+                            getInteractionsForPlan(planId),
                         ]);
                         if (!isMountedRef.current) return;
+                        loadedPlanIdRef.current = planId;
                         setPlan(planData);
                         setInteractions(interactionData);
                         setIsLoading(false);
@@ -160,17 +176,16 @@ export default function Explore() {
                 }
             }
 
-            // Case C: Auto-fallback to user's latest exploration from getSpacePlans()
+            // Case C: Auto-fallback to user's latest exploration from cached plans
             try {
-                const plans = await getSpacePlans();
-                if (!isMountedRef.current) return;
                 if (plans.length > 0) {
                     const latest = plans[0];
                     localStorage.setItem('active_exploration_id', String(latest.id));
                     navigate(`/explore/${latest.id}`, { replace: true });
                     return;
-                } else {
+                } else if (!isPlansLoading) {
                     // User has 0 explorations in total: stay on /explore and show empty state
+                    loadedPlanIdRef.current = null;
                     setPlan(null);
                     setInteractions([]);
                     setError(null);
@@ -182,14 +197,14 @@ export default function Explore() {
                 setInteractions([]);
                 setError(null);
             } finally {
-                if (isMountedRef.current) {
+                if (isMountedRef.current && !isPlansLoading) {
                     setIsLoading(false);
                 }
             }
         };
 
         loadOrResume();
-    }, [id, initialPrompt, navigate, plan]);
+    }, [id, initialPrompt, startFresh, navigate, plans, isPlansLoading, getPlanById, getInteractionsForPlan]);
 
     const handleRetryCreation = async () => {
         if (!creationPrompt.trim()) return;
@@ -200,10 +215,13 @@ export default function Explore() {
         try {
             const newPlan = await createSpacePlan(creationPrompt);
             localStorage.setItem('active_exploration_id', String(newPlan.id));
+            addPlan(newPlan);
+            loadedPlanIdRef.current = newPlan.id;
             setPlan(newPlan);
             setInteractions([]);
             setIsCreatingNew(false);
             setIsLoading(false);
+            window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
             navigate(`/explore/${newPlan.id}`, { replace: true, state: {} });
         } catch (err: unknown) {
             console.error("Failed to create exploration on retry", err);
@@ -421,11 +439,11 @@ export default function Explore() {
                 user_prompt: submitPrompt,
                 interaction_type: type
             });
-            setInteractions(prev => [...prev, newInteraction]);
-            
             // Re-fetch the space plan to instantly load any newly created discoveries
             const updatedPlan = await getSpacePlan(plan.id);
             setPlan(updatedPlan);
+            setInteractions(prev => [...prev, newInteraction]);
+            addInteractionToCache(plan.id, newInteraction, updatedPlan);
             window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
             
             setPrompt("");

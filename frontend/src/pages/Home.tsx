@@ -1,30 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Search, Compass } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getSpacePlans } from '../api/planner';
-import type { SpacePlan } from '../types/planner';
+import { usePlans } from '../context/PlansContext';
 
 export default function Home() {
     const navigate = useNavigate();
+    const { plans, isLoading: isLoadingRecent } = usePlans();
     const [prompt, setPrompt] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [recentPlans, setRecentPlans] = useState<SpacePlan[]>([]);
-    const [isLoadingRecent, setIsLoadingRecent] = useState(true);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        const fetchRecent = async () => {
-            try {
-                const plans = await getSpacePlans();
-                setRecentPlans(plans.slice(0, 3));
-            } catch (err) {
-                console.error("Failed to load recent plans", err);
-            } finally {
-                setIsLoadingRecent(false);
-            }
-        };
-        fetchRecent();
-    }, []);
+    const recentPlans = plans.filter(p => !p.is_archived).slice(0, 3);
 
     const handleExplore = (text: string = prompt) => {
         const query = text.trim();

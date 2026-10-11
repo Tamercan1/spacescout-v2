@@ -28,3 +28,7 @@ The `docs/` directory contains the project's authoritative context documents. Re
 5. **Security first for credentials.** Never expose provider credentials to the frontend in plaintext, commit secrets, or log API keys. See `docs/DEVELOPMENT_RULES.md` for the full security rules.
 
 6. **Design before UI.** Follow the mockup-first workflow defined in `docs/DESIGN.md` for major visual changes. Do not implement substantial React UI changes without an approved design direction.
+
+7. **Manual UI testing by user.** Do NOT run automated browser testing subagents or launch automated browsers when implementing or fixing UI changes. The user tests the UI directly. Keep shell commands minimal (run only essential type checks or build verifications). Focus directly on clean frontend code.
+
+8. **Efficient API calling & state caching.** Never introduce isolated, duplicate API calls across layout components and pages for the same resources. Always utilize shared state providers (e.g., `PlansContext`) with in-memory caching, request deduplication, and optimistic cache mutations.

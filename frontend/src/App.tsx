@@ -12,6 +12,9 @@ import Explorations from './pages/Explorations';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 
+import { PlansProvider } from './context/PlansContext';
+import { CredentialsProvider } from './context/CredentialsContext';
+
 function App() {
   return (
     <BrowserRouter>
@@ -23,7 +26,15 @@ function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route path="/onboarding" element={<Onboarding />} />
-          <Route element={<AppShell />}>
+          <Route
+            element={
+              <PlansProvider>
+                <CredentialsProvider>
+                  <AppShell />
+                </CredentialsProvider>
+              </PlansProvider>
+            }
+          >
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/explore/:id" element={<Explore />} />
