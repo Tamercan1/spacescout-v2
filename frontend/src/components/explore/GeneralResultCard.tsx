@@ -1,6 +1,7 @@
+import { useState, useRef, useEffect } from 'react';
 import type { AnalysisResult, GenericResult, ResultSection } from '../../types/planner';
 import ReactMarkdown from 'react-markdown';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface GeneralResultCardProps {
     result: AnalysisResult | GenericResult;
@@ -11,16 +12,52 @@ interface GeneralResultCardProps {
 
 /**
  * Renders an analysis-style interaction result or a generic fallback.
- * Supports a title and streamlined markdown content, with optional discovery indicators.
+ * Supports a title and streamlined markdown content, with optional discovery indicators
+ * and a smooth max-height clamp with 'Show more / Show less' fade for tall responses.
  */
 export default function GeneralResultCard({ result, addedCount, referencedCount, discoveryCount }: GeneralResultCardProps) {
     const failures = result.metadata?.tool_failures as Array<{ tool: string; error: string }> | undefined;
     
+    const cardRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const [isClamped, setIsClamped] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+
     let title = "Response";
     let renderContent: React.ReactNode;
 
     const effectiveAddedCount = addedCount ?? discoveryCount ?? 0;
     const effectiveReferencedCount = referencedCount ?? 0;
+
+    useEffect(() => {
+        const el = contentRef.current;
+        if (!el) return;
+
+        const checkHeight = () => {
+            if (el) {
+                // If scrollHeight exceeds 260px, it needs clamping
+                const needsClamp = el.scrollHeight > 260;
+                setIsClamped(needsClamp);
+            }
+        };
+
+        checkHeight();
+
+        const ro = new ResizeObserver(checkHeight);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [result]);
+
+    const handleToggle = () => {
+        if (expanded) {
+            setExpanded(false);
+            setTimeout(() => {
+                cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 50);
+        } else {
+            setExpanded(true);
+        }
+    };
 
     if (result.result_type === "analysis") {
         const analysis = result as AnalysisResult;
@@ -62,7 +99,7 @@ export default function GeneralResultCard({ result, addedCount, referencedCount,
     }
 
     return (
-        <div className="result-card result-card--analysis">
+        <div ref={cardRef} className="result-card result-card--analysis">
             <div className="result-card__badge result-card__badge--analysis">
                 <Sparkles size={11} />
                 <span>AI Analysis</span>
@@ -90,7 +127,32 @@ export default function GeneralResultCard({ result, addedCount, referencedCount,
                 </div>
             )}
 
-            {renderContent}
+            <div
+                ref={contentRef}
+                className="result-card__clamp-wrapper"
+                style={{
+                    maxHeight: isClamped && !expanded ? '260px' : undefined
+                }}
+            >
+                {renderContent}
+                {isClamped && !expanded && (
+                    <div className="result-card__clamp-fade" />
+                )}
+            </div>
+
+            {isClamped && (
+                <div className={`result-card__clamp-action ${isClamped && !expanded ? 'result-card__clamp-action--clamped' : 'result-card__clamp-action--expanded'}`}>
+                    <button
+                        type="button"
+                        onClick={handleToggle}
+                        className="result-card__clamp-btn"
+                        aria-expanded={expanded}
+                    >
+                        <span>{expanded ? 'Show less' : 'Show full analysis'}</span>
+                        {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

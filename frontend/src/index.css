@@ -2393,6 +2393,62 @@ textarea {
   line-height: 1.6;
 }
 
+/* AI Analysis / General Result Card Content Clamping */
+.result-card__clamp-wrapper {
+  position: relative;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.result-card__clamp-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 90px;
+  background: linear-gradient(to bottom, transparent 0%, var(--surface) 90%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.result-card__clamp-action {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 3;
+}
+
+.result-card__clamp-action--clamped {
+  margin-top: -18px;
+}
+
+.result-card__clamp-action--expanded {
+  margin-top: 14px;
+}
+
+.result-card__clamp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-1);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all var(--ease);
+}
+
+.result-card__clamp-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--blue);
+  color: var(--blue);
+  transform: translateY(-1px);
+}
+
 /* ============================================================
    RESPONSIVE — Explore page
 ============================================================ */
