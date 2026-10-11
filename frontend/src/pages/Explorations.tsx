@@ -24,8 +24,15 @@ export default function Explorations() {
     };
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchPlans();
+
+        const handleUpdate = () => {
+            fetchPlans();
+        };
+        window.addEventListener('spacescout:plans_updated', handleUpdate);
+        return () => {
+            window.removeEventListener('spacescout:plans_updated', handleUpdate);
+        };
     }, []);
 
     const toggleArchive = async (e: React.MouseEvent, plan: SpacePlan) => {
@@ -33,6 +40,7 @@ export default function Explorations() {
         try {
             const updated = await updateSpacePlan(plan.id, { is_archived: !plan.is_archived });
             setPlans(prev => prev.map(p => p.id === plan.id ? updated : p));
+            window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
         } catch (err) {
             console.error("Failed to update archive status", err);
         }

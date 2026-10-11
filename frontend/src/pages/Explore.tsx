@@ -14,18 +14,20 @@ export default function Explore() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const navState = location.state as { initialPrompt?: string } | null;
+    const navState = location.state as { initialPrompt?: string; startFresh?: boolean } | null;
     const initialPrompt = navState?.initialPrompt;
+    const startFresh = navState?.startFresh;
 
     const [plan, setPlan] = useState<SpacePlan | null>(null);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(!startFresh);
     const [isCreatingNew, setIsCreatingNew] = useState(Boolean(initialPrompt));
     const [creationPrompt] = useState(initialPrompt || "");
     const [creationStep, setCreationStep] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [continueExpanded, setContinueExpanded] = useState(false);
     const [prompt, setPrompt] = useState("");
+    const [emptyPrompt, setEmptyPrompt] = useState("");
     const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
 
     const isMountedRef = useRef(true);
@@ -50,6 +52,17 @@ export default function Explore() {
         };
     }, [isCreatingNew]);
 
+    // Handle explicit startFresh request from sidebar "+ New" button
+    useEffect(() => {
+        if (!startFresh) return;
+        localStorage.removeItem('active_exploration_id');
+        setPlan(null);
+        setInteractions([]);
+        setIsLoading(false);
+        setIsCreatingNew(false);
+        setError(null);
+    }, [startFresh]);
+
     // Creation flow when initialPrompt is provided via navigation
     useEffect(() => {
         if (!initialPrompt) return;
@@ -69,6 +82,7 @@ export default function Explore() {
                 setInteractions([]);
                 setIsCreatingNew(false);
                 setIsLoading(false);
+                window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
                 navigate(`/explore/${newPlan.id}`, { replace: true, state: {} });
             } catch (err: unknown) {
                 if (!isMountedRef.current) return;
@@ -85,7 +99,7 @@ export default function Explore() {
 
     // Loading existing plan or handling resumption when no prompt is provided
     useEffect(() => {
-        if (initialPrompt) return;
+        if (initialPrompt || startFresh) return;
 
         const loadOrResume = async () => {
             // If already loaded in state (e.g. from createSpacePlan), keep it without refetching
@@ -345,16 +359,49 @@ export default function Explore() {
                         <div className="explore-empty-icon-wrap">
                             <Compass size={32} />
                         </div>
-                        <h2 className="explore-empty-title">No Active Exploration</h2>
+                        <h2 className="explore-empty-title">Start a New Exploration</h2>
                         <p className="explore-empty-desc">
-                            Launch an AI-guided space exploration from Home, or select an existing mission from your archive to continue.
+                            Explore near-Earth asteroids, recent solar flares, deep-space imaging, and NASA archives.
                         </p>
-                        <div className="explore-empty-actions">
-                            <button className="btn btn-primary" onClick={() => navigate('/')}>
-                                <Compass size={15} /> Start Mission on Home
+                        
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                if (emptyPrompt.trim()) {
+                                    navigate('/explore', { state: { initialPrompt: emptyPrompt.trim() } });
+                                }
+                            }}
+                            style={{ width: '100%', maxWidth: '520px', display: 'flex', gap: '8px', margin: '16px 0 8px' }}
+                        >
+                            <input
+                                type="text"
+                                placeholder="e.g. Near-Earth asteroids approaching this week..."
+                                value={emptyPrompt}
+                                onChange={(e) => setEmptyPrompt(e.target.value)}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px 14px',
+                                    borderRadius: 'var(--radius)',
+                                    background: 'var(--surface-2)',
+                                    border: '1px solid var(--border-2)',
+                                    color: 'var(--text-1)',
+                                    fontSize: '0.88rem',
+                                    outline: 'none'
+                                }}
+                            />
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={!emptyPrompt.trim()}
+                                style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                <Sparkles size={14} /> Explore
                             </button>
-                            <button className="btn btn-secondary" onClick={() => navigate('/explorations')}>
-                                <Layers size={15} /> Browse Archive
+                        </form>
+
+                        <div className="explore-empty-actions" style={{ marginTop: '10px' }}>
+                            <button className="btn btn-ghost" onClick={() => navigate('/explorations')}>
+                                <Layers size={14} /> Browse All Explorations
                             </button>
                         </div>
                     </div>
@@ -379,6 +426,7 @@ export default function Explore() {
             // Re-fetch the space plan to instantly load any newly created discoveries
             const updatedPlan = await getSpacePlan(plan.id);
             setPlan(updatedPlan);
+            window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
             
             setPrompt("");
         } catch (err) {
@@ -455,9 +503,11 @@ export default function Explore() {
                             <span className="feed-label__count">{initialDiscoveries.length}</span>
                         </div>
 
-                        {initialDiscoveries.map((discovery: Discovery) => (
-                            <DiscoveryCard key={discovery.id} discovery={discovery} />
-                        ))}
+                        <div className="discovery-grid">
+                            {initialDiscoveries.map((discovery: Discovery) => (
+                                <DiscoveryCard key={discovery.id} discovery={discovery} />
+                            ))}
+                        </div>
                     </>
                 )}
 
@@ -469,20 +519,22 @@ export default function Explore() {
                             <span className="feed-label__count">{followUpDiscoveries.length}</span>
                         </div>
 
-                        {followUpDiscoveries.map((discovery: Discovery) => (
-                            <DiscoveryCard key={discovery.id} discovery={discovery} />
-                        ))}
+                        <div className="discovery-grid">
+                            {followUpDiscoveries.map((discovery: Discovery) => (
+                                <DiscoveryCard key={discovery.id} discovery={discovery} />
+                            ))}
+                        </div>
                     </>
                 )}
 
                 {discoveries.length === 0 && interactions.length === 0 && (
-                    <div style={{ gridColumn: '1 / -1', color: 'var(--text-3)', textAlign: 'center', marginTop: '40px', fontSize: '0.9rem' }}>
+                    <div style={{ color: 'var(--text-3)', textAlign: 'center', marginTop: '40px', fontSize: '0.9rem' }}>
                         No discoveries yet.
                     </div>
                 )}
 
                 {/* Interaction stream */}
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ width: '100%' }}>
                     <InteractionStream interactions={interactions} />
                     
                     {isCreatingInteraction && (
