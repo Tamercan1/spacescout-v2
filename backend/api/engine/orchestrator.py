@@ -320,12 +320,14 @@ class GenericOrchestrator(BaseOrchestrator):
             return
 
         enrichment_prompt = (
-            "You are SpaceScout's astronomical science curator. For each discovery below, provide a custom, engaging 'why_interesting' explanation.\n\n"
-            "Guidelines:\n"
-            "- Write 1 to 2 punchy, dynamic sentences highlighting cosmic significance, uniqueness, or observational wonder.\n"
-            "- Avoid repetitive boilerplate or generic formulaic phrasing (do NOT use phrases like 'Classified as an X-class flare' or 'With an estimated diameter of').\n"
-            "- Focus on why a human space explorer would find this cosmic event or object fascinating.\n"
-            "- Return ONLY a JSON object mapping each discovery id to its why_interesting explanation, with format:\n"
+            "You are SpaceScout's astronomical science curator. For each discovery below, provide:\n"
+            "1. 'why_interesting': 1 to 2 punchy, dynamic sentences highlighting cosmic significance, uniqueness, or observational wonder.\n"
+            "   - Avoid repetitive boilerplate or generic formulaic phrasing (do NOT use phrases like 'Classified as an X-class flare' or 'With an estimated diameter of').\n"
+            "   - Focus on why a human space explorer would find this cosmic event or object fascinating.\n"
+            "2. 'summary': If the existing summary is overly verbose, bloated (> 180 characters), or contains technical/archive jargon, rewrite it into 1 to 2 concise, clear, and elegant sentences describing what this object or observation is. If the existing summary is already concise and clear, keep it or omit it.\n\n"
+            "Return ONLY a JSON object mapping each discovery id to an object with 'why_interesting' and optionally 'summary':\n"
+            '{\n  "<id>": {\n    "why_interesting": "explanation text",\n    "summary": "concise description"\n  }\n}\n'
+            "Alternatively, mapping directly to a string is also accepted for backward compatibility:\n"
             '{\n  "<id>": "explanation text"\n}'
         )
 
@@ -356,6 +358,13 @@ class GenericOrchestrator(BaseOrchestrator):
                         insight = insights_map[str(d.external_id)]
                         if isinstance(insight, str) and insight.strip():
                             d.why_interesting = insight.strip()
+                        elif isinstance(insight, dict):
+                            why = insight.get("why_interesting")
+                            if isinstance(why, str) and why.strip():
+                                d.why_interesting = why.strip()
+                            rewritten_summary = insight.get("summary")
+                            if isinstance(rewritten_summary, str) and rewritten_summary.strip():
+                                d.summary = rewritten_summary.strip()
         except Exception as e:
             logger.warning(f"Failed to generate LLM why_interesting enrichment: {e}")
             # Strict LLM-only policy: remains empty string if LLM fails

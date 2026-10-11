@@ -1,6 +1,6 @@
 from typing import Any
 from api.engine.contracts import BaseTool, ToolResult, ToolExecutionContext, DiscoveryData, ResultType
-from api.services.nasa.nasa_services import search_nasa_images
+from api.services.nasa.nasa_services import search_nasa_images, clean_nasa_description
 
 
 def format_nasa_image_facts(item: dict[str, Any]) -> dict[str, Any]:
@@ -199,11 +199,14 @@ class NASAImagesTool(BaseTool):
             date_str = item.get("date_created")
             clean_date = date_str.split("T")[0] if date_str else None
 
+            raw_summary = item.get("description") or "NASA imagery asset."
+            clean_summary = clean_nasa_description(raw_summary) or "NASA imagery asset."
+
             discoveries.append(DiscoveryData(
                 source=self.name,
                 external_id=item.get("nasa_id") or None,
                 title=item.get("title") or f"NASA Asset: {actual_query}",
-                summary=item.get("description") or "NASA imagery asset.",
+                summary=clean_summary,
                 why_interesting="",
                 date=clean_date,
                 source_url=item.get("image_url") or "https://images.nasa.gov",

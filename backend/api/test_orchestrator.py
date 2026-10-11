@@ -435,6 +435,40 @@ class TestOrchestrator(unittest.TestCase):
         )
         self.assertEqual(self.provider.generate.call_count, 3)
 
+    def test_post_tool_llm_enrichment_rewrites_summary_and_why_interesting(self):
+        from api.engine.contracts import DiscoveryData
+        fake_tool = FakeTool()
+        disc = DiscoveryData(
+            source="fake_tool",
+            external_id="disc_rewrite",
+            title="Ring Nebula",
+            summary="Very long bloated description full of archive details that needs trimming.",
+            why_interesting=""
+        )
+        fake_tool.execute_mock.return_value = ToolResult(
+            tool_name="fake_tool",
+            result_type="custom",
+            data={"status": "ok"},
+            discoveries=[disc],
+            metadata={"success": True}
+        )
+        self.registry.register(fake_tool)
+
+        self.provider.generate.side_effect = [
+            LLMResponse(
+                content=None,
+                tool_calls=[ToolCall(tool_name="fake_tool", arguments={"arg1": "value"})]
+            ),
+            LLMResponse(content="Found Ring Nebula."),
+            LLMResponse(content='{"disc_rewrite": {"summary": "A colorful planetary nebula in Lyra.", "why_interesting": "Stunning showcase of stellar death."}}')
+        ]
+
+        result = self.orchestrator.execute(self.context)
+        self.assertTrue(result.success)
+        self.assertEqual(len(result.discoveries), 1)
+        self.assertEqual(result.discoveries[0].summary, "A colorful planetary nebula in Lyra.")
+        self.assertEqual(result.discoveries[0].why_interesting, "Stunning showcase of stellar death.")
+
     def test_post_tool_llm_enrichment_failure_strict_policy_leaves_blank(self):
         from api.engine.contracts import DiscoveryData
         fake_tool = FakeTool()

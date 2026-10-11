@@ -643,6 +643,51 @@ class TestNASATools(TestCase):
         self.assertEqual(len(d1.media), 1)
         self.assertEqual(d1.media[0]["url"], "https://images-assets.nasa.gov/image/PIA01518/PIA01518~orig.jpg")
 
+    def test_clean_nasa_description_strips_html_boilerplate_and_shortens(self):
+        from api.services.nasa.nasa_services import clean_nasa_description
+        raw_text = (
+            "This planetary nebula's simple appearance is thought to be due to perspective: "
+            "our view looking into a cloud of gas shrugged off by a dying star. "
+            "Hot blue gas gives way to progressively cooler green and red gas. "
+            "Credit: NASA/Hubble Heritage Team ---- "
+            "&quot;The nebula is not like a bagel, but rather like a jelly doughnut,&quot; said astronomer. "
+            "Read more: <a href=\"http://1.usa.gov/14VAOMk\">link</a> "
+            "<b>Follow us on <a href=\"http://twitter.com\">Twitter</a></b>"
+        )
+        cleaned = clean_nasa_description(raw_text)
+        self.assertNotIn("<a href", cleaned)
+        self.assertNotIn("<b>", cleaned)
+        self.assertNotIn("&quot;", cleaned)
+        self.assertNotIn("Follow us on", cleaned)
+        self.assertNotIn("Read more:", cleaned)
+        self.assertIn("This planetary nebula's simple appearance", cleaned)
+        self.assertTrue(len(cleaned) <= 300)
+
+    @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
+    def test_nasa_images_tool_sanitizes_discovery_summary(self, mock_search):
+        mock_search.return_value = {
+            "count": 1,
+            "items": [
+                {
+                    "nasa_id": "PIA99999",
+                    "title": "Nebula X",
+                    "description": "A glowing nebula. &quot;Amazing view,&quot; said scientists. Read more: <a href=\"#\">here</a>",
+                    "date_created": "2020-01-01T00:00:00Z",
+                    "center": "GSFC",
+                    "keywords": ["Nebula"],
+                    "media_type": "image",
+                    "image_url": "https://images-assets.nasa.gov/image/PIA99999/PIA99999~orig.jpg"
+                }
+            ]
+        }
+        tool = NASAImagesTool()
+        result = tool.execute(self.context, query="Nebula X")
+        self.assertEqual(len(result.discoveries), 1)
+        summary = result.discoveries[0].summary
+        self.assertNotIn("<a href", summary)
+        self.assertNotIn("&quot;", summary)
+        self.assertIn("A glowing nebula.", summary)
+
     @patch("api.engine.tools.nasa.nasa_images.search_nasa_images")
     def test_nasa_images_tool_empty(self, mock_search):
         mock_search.return_value = {

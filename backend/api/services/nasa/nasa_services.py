@@ -310,6 +310,63 @@ def _parse_nasa_images_total_hits(data: dict) -> int | None:
     return None
 
 
+def clean_nasa_description(raw_desc: str) -> str:
+    """
+    Cleans raw NASA Image and Media Archive descriptions:
+    - Decodes HTML entities (&quot;, &amp;, etc.)
+    - Removes social media handles, image use policy links, PR boilerplate, credits
+    - Strips all HTML markup (<a href...>, <b>, etc.)
+    - Normalizes excessive whitespace
+    - Keeps concise 1-2 sentences as a robust baseline
+    """
+    if not raw_desc:
+        return ""
+
+    text = raw_desc.strip()
+    text = html.unescape(text)
+
+    # 1. Drop boilerplate social media, policy, and trailing promo links
+    boilerplate_patterns = [
+        r'(?i)\b(?:Read more|Learn more|Full story|More info|NASA image use policy|Follow us on|Like us on|Find us on)\b.*$',
+        r'(?i)\b(?:Credit|Image credit|Photo credit|Credits)\s*:\s*.*?(?:---+|\n|$)',
+        r'---+.*$',
+    ]
+    for pattern in boilerplate_patterns:
+        text = re.sub(pattern, ' ', text)
+
+    # 2. Strip HTML tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+
+    # 3. Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    # 4. Extract first 1-2 sentences if still long (> 180 chars)
+    if len(text) > 180:
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"\'“])', text)
+        if len(sentences) == 1:
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+
+        clean_sentences = []
+        char_count = 0
+        for s in sentences:
+            s = s.strip()
+            if not s:
+                continue
+            clean_sentences.append(s)
+            char_count += len(s)
+            if len(clean_sentences) >= 2 or char_count >= 180:
+                break
+        if clean_sentences:
+            text = ' '.join(clean_sentences)
+
+    # 5. Cap at 280 chars if no sentence breaks existed
+    if len(text) > 280 and not any(text.endswith(p) for p in ('.', '!', '?')):
+        truncated = text[:280].rsplit(' ', 1)[0]
+        text = f"{truncated}..."
+
+    return text.strip()
+
+
 def _parse_nasa_images_collection(data: dict) -> list[dict]:
     items = []
     raw_items = data.get("collection", {}).get("items", [])
@@ -324,7 +381,7 @@ def _parse_nasa_images_collection(data: dict) -> list[dict]:
         items.append({
             "nasa_id": d.get("nasa_id"),
             "title": d.get("title", "NASA Asset"),
-            "description": d.get("description", ""),
+            "description": clean_nasa_description(d.get("description", "")),
             "date_created": d.get("date_created"),
             "center": d.get("center"),
             "keywords": d.get("keywords", []),
