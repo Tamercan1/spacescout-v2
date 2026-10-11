@@ -3,7 +3,6 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
     Menu as MenuIcon, 
-    Search as SearchIcon, 
     LogOut as LogOutIcon, 
     Settings as SettingsIcon,
 } from 'lucide-react';
@@ -43,9 +42,8 @@ export default function AppNavbar({ toggleSidebar }: AppNavbarProps) {
             <div className="nav__divider"></div>
             
             <Link to="/" className="nav__brand">
-                <div className="nav__brand-mark">
-                    <SearchIcon size={14} strokeWidth={3} />
-                </div>
+                <img src="/spacescout-logo.png" alt="SpaceScout logo" className="nav__brand-logo nav__brand-logo--dark" />
+                <img src="/spacescout-logo-light.png" alt="SpaceScout logo" className="nav__brand-logo nav__brand-logo--light" />
                 SpaceScout
                 <span className="nav__brand-v2">V2</span>
             </Link>

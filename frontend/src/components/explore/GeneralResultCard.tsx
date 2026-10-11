@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { AnalysisResult, GenericResult, ResultSection } from '../../types/planner';
 import ReactMarkdown from 'react-markdown';
-import { Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, ChevronDown, ChevronUp, ArrowUp } from 'lucide-react';
 
 interface GeneralResultCardProps {
     result: AnalysisResult | GenericResult;
@@ -28,6 +28,32 @@ export default function GeneralResultCard({ result, addedCount, referencedCount,
 
     const effectiveAddedCount = addedCount ?? discoveryCount ?? 0;
     const effectiveReferencedCount = referencedCount ?? 0;
+
+    const scrollToAddedDiscoveries = () => {
+        const section = document.getElementById('follow-up-discoveries-section');
+        const bottomEl = document.getElementById('follow-up-discoveries-bottom');
+        const lastCard = section?.querySelector('.discovery-grid > :last-child');
+
+        if (lastCard) {
+            lastCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            section?.classList.add('highlight-pulse');
+            setTimeout(() => {
+                section?.classList.remove('highlight-pulse');
+            }, 1600);
+        } else if (bottomEl) {
+            bottomEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            section?.classList.add('highlight-pulse');
+            setTimeout(() => {
+                section?.classList.remove('highlight-pulse');
+            }, 1600);
+        } else if (section) {
+            section.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } else {
+            const grids = document.querySelectorAll('.discovery-grid');
+            const lastGrid = grids[grids.length - 1];
+            lastGrid?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    };
 
     useEffect(() => {
         const el = contentRef.current;
@@ -107,10 +133,16 @@ export default function GeneralResultCard({ result, addedCount, referencedCount,
             <div className="result-card__header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
                 <div className="result-card__title" style={{ margin: 0 }}>{title}</div>
                 {effectiveAddedCount > 0 ? (
-                    <div className="result-card__discovery-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '4px 10px', borderRadius: '12px', background: 'rgba(56, 189, 248, 0.12)', color: 'var(--blue, #38bdf8)', border: '1px solid rgba(56, 189, 248, 0.25)', fontWeight: 500 }}>
+                    <button
+                        type="button"
+                        onClick={scrollToAddedDiscoveries}
+                        className="result-card__discovery-badge result-card__discovery-btn"
+                        title="Scroll up to view added discoveries"
+                    >
                         <Sparkles size={13} />
                         <span>Added {effectiveAddedCount} new discover{effectiveAddedCount === 1 ? 'y' : 'ies'}</span>
-                    </div>
+                        <ArrowUp size={12} className="result-card__btn-arrow" />
+                    </button>
                 ) : effectiveReferencedCount > 0 ? (
                     <div className="result-card__discovery-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '4px 10px', borderRadius: '12px', background: 'rgba(148, 163, 184, 0.12)', color: 'var(--text-2)', border: '1px solid var(--border)', fontWeight: 500 }}>
                         <span>Referenced {effectiveReferencedCount} discover{effectiveReferencedCount === 1 ? 'y' : 'ies'}</span>
@@ -140,17 +172,31 @@ export default function GeneralResultCard({ result, addedCount, referencedCount,
                 )}
             </div>
 
-            {isClamped && (
-                <div className={`result-card__clamp-action ${isClamped && !expanded ? 'result-card__clamp-action--clamped' : 'result-card__clamp-action--expanded'}`}>
-                    <button
-                        type="button"
-                        onClick={handleToggle}
-                        className="result-card__clamp-btn"
-                        aria-expanded={expanded}
-                    >
-                        <span>{expanded ? 'Show less' : 'Show full analysis'}</span>
-                        {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </button>
+            {(effectiveAddedCount > 0 || isClamped) && (
+                <div className={`result-card__footer-actions ${isClamped && !expanded ? 'result-card__footer-actions--clamped' : 'result-card__footer-actions--expanded'}`}>
+                    {effectiveAddedCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={scrollToAddedDiscoveries}
+                            className="result-card__scroll-up-btn"
+                            title="Scroll up to view added discoveries"
+                        >
+                            <ArrowUp size={13} />
+                            <span>View added discover{effectiveAddedCount === 1 ? 'y' : 'ies'} ({effectiveAddedCount})</span>
+                        </button>
+                    )}
+
+                    {isClamped && (
+                        <button
+                            type="button"
+                            onClick={handleToggle}
+                            className="result-card__clamp-btn"
+                            aria-expanded={expanded}
+                        >
+                            <span>{expanded ? 'Show less' : 'Show full analysis'}</span>
+                            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                    )}
                 </div>
             )}
         </div>

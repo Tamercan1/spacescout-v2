@@ -116,12 +116,25 @@ export default function Settings() {
     };
 
     const [theme, setTheme] = useState(() => {
+        const saved = localStorage.getItem('spacescout_theme');
+        if (saved) return saved;
         return document.documentElement.classList.contains('theme-dark') ? 'dark' : 'light';
     });
 
-    const handleThemeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newTheme = e.target.value;
+    const [keepContinueOpen, setKeepContinueOpen] = useState(() => {
+        return localStorage.getItem('spacescout_keep_continue_open') === 'true';
+    });
+
+    const toggleKeepContinueOpen = () => {
+        const next = !keepContinueOpen;
+        setKeepContinueOpen(next);
+        localStorage.setItem('spacescout_keep_continue_open', String(next));
+    };
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'dark' ? 'light' : 'dark';
         setTheme(newTheme);
+        localStorage.setItem('spacescout_theme', newTheme);
         if (newTheme === 'dark') {
             document.documentElement.classList.add('theme-dark');
             document.documentElement.classList.remove('theme-light');
@@ -459,38 +472,36 @@ export default function Settings() {
 
                         <div className="settings-row">
                             <div>
-                                <div className="settings-row__label">Theme</div>
+                                <div className="settings-row__label">Dark theme</div>
                                 <div className="settings-row__sub">Use dark or light theme</div>
                             </div>
-                            <select
-                                className="settings-input"
-                                style={{ appearance: 'auto', cursor: 'pointer', width: 'auto' }}
-                                value={theme}
-                                onChange={handleThemeChange}
+                            <button
+                                type="button"
+                                className={`toggle ${theme === 'dark' ? 'on' : ''}`}
+                                onClick={toggleTheme}
+                                aria-label="Toggle dark theme"
+                                role="switch"
+                                aria-checked={theme === 'dark'}
                             >
-                                <option value="dark">Dark Theme</option>
-                                <option value="light">Light Theme</option>
-                            </select>
-                        </div>
-
-                        <div className="settings-row">
-                            <div>
-                                <div className="settings-row__label">Auto-expand discovery details</div>
-                                <div className="settings-row__sub">Show full card content by default</div>
-                            </div>
-                            <div className="toggle on">
                                 <div className="toggle__thumb"></div>
-                            </div>
+                            </button>
                         </div>
 
                         <div className="settings-row">
                             <div>
                                 <div className="settings-row__label">Keep continue pane open</div>
-                                <div className="settings-row__sub">Always show the exploration control</div>
+                                <div className="settings-row__sub">Always show the exploration control by default</div>
                             </div>
-                            <div className="toggle">
+                            <button
+                                type="button"
+                                className={`toggle ${keepContinueOpen ? 'on' : ''}`}
+                                onClick={toggleKeepContinueOpen}
+                                aria-label="Toggle keep continue pane open"
+                                role="switch"
+                                aria-checked={keepContinueOpen}
+                            >
                                 <div className="toggle__thumb"></div>
-                            </div>
+                            </button>
                         </div>
                     </div>
                 )}

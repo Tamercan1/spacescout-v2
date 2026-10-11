@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
     Compass, Layers, MessageSquare, Loader2,
-    Sparkles, Orbit, CheckCircle2, AlertCircle, RefreshCw
+    Sparkles, Orbit, CheckCircle2, AlertCircle, RefreshCw,
+    ChevronUp, ChevronDown, Send
 } from 'lucide-react';
 import { getSpacePlan, createSpacePlan, createInteraction } from '../api/planner';
 import { usePlans } from '../context/PlansContext';
@@ -32,15 +33,20 @@ export default function Explore() {
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [isLoading, setIsLoading] = useState(!startFresh);
     const [isCreatingNew, setIsCreatingNew] = useState(Boolean(initialPrompt));
-    const [creationPrompt] = useState(initialPrompt || "");
+    const [creationPrompt, setCreationPrompt] = useState(initialPrompt || "");
     const [creationStep, setCreationStep] = useState(0);
     const [error, setError] = useState<string | null>(null);
-    const [continueExpanded, setContinueExpanded] = useState(false);
+    const [continueExpanded, setContinueExpanded] = useState(() => {
+        return localStorage.getItem('spacescout_keep_continue_open') === 'true';
+    });
     const [prompt, setPrompt] = useState("");
     const [emptyPrompt, setEmptyPrompt] = useState("");
     const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
 
     const loadedPlanIdRef = useRef<number | null>(null);
+    const dockRef = useRef<HTMLDivElement>(null);
+    const streamEndRef = useRef<HTMLDivElement>(null);
+    const justSubmittedRef = useRef<boolean>(false);
     const isMountedRef = useRef(true);
     useEffect(() => {
         isMountedRef.current = true;
@@ -48,6 +54,74 @@ export default function Explore() {
             isMountedRef.current = false;
         };
     });
+
+    // Auto-collapse dock on outside click or Escape key unless 'keep open' preference is enabled
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const keepOpen = localStorage.getItem('spacescout_keep_continue_open') === 'true';
+            if (keepOpen) return;
+            if (dockRef.current && !dockRef.current.contains(e.target as Node)) {
+                setContinueExpanded(false);
+            }
+        };
+
+        const handleKeyDownEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                const keepOpen = localStorage.getItem('spacescout_keep_continue_open') === 'true';
+                if (!keepOpen) {
+                    setContinueExpanded(false);
+                }
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDownEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDownEscape);
+        };
+    }, []);
+
+    // Context-aware dynamic suggestion chips based on active mission findings
+    const dynamicChips = useMemo(() => {
+        if (!plan) return [];
+        const chips: string[] = ['Find more like these'];
+        const planDiscoveries = plan.discoveries || [];
+        
+        const hasNeo = planDiscoveries.some(d => d.type === 'neo' || d.source === 'neows');
+        const hasSolar = planDiscoveries.some(d => d.source === 'donki' || d.type === 'solar_flare');
+        const hasApodOrImage = planDiscoveries.some(d => d.source === 'apod' || d.source === 'nasa_images' || d.source === 'epic');
+
+        const namedDiscovery = planDiscoveries.find(d => d.title && d.title.length < 32 && !d.title.toLowerCase().includes('untitled'));
+        if (namedDiscovery) {
+            chips.push(`Deep dive on ${namedDiscovery.title}`);
+        }
+
+        if (hasNeo) {
+            chips.push('All hazardous objects', 'Closest approach data');
+        } else if (hasSolar) {
+            chips.push('Solar flare radiation risks', 'CME arrival timeline');
+        } else if (hasApodOrImage) {
+            chips.push('High-resolution imagery details', 'Telescope instruments used');
+        } else {
+            chips.push('Scientific background', 'Key discoveries summary');
+        }
+
+        return Array.from(new Set(chips)).slice(0, 4);
+    }, [plan]);
+
+    // Smoothly scroll to the bottom when a follow-up interaction request is launched or completed
+    useEffect(() => {
+        if (isCreatingInteraction || justSubmittedRef.current) {
+            const timer = setTimeout(() => {
+                streamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                if (!isCreatingInteraction) {
+                    justSubmittedRef.current = false;
+                }
+            }, 60);
+            return () => clearTimeout(timer);
+        }
+    }, [isCreatingInteraction, interactions.length]);
 
     const creationStartedRef = useRef<string | null>(null);
 
@@ -82,6 +156,7 @@ export default function Explore() {
         creationStartedRef.current = initialPrompt;
 
         const runCreate = async () => {
+            setCreationPrompt(initialPrompt);
             setIsCreatingNew(true);
             setIsLoading(true);
             setError(null);
@@ -178,10 +253,10 @@ export default function Explore() {
 
             // Case C: Auto-fallback to user's latest exploration from cached plans
             try {
-                if (plans.length > 0) {
-                    const latest = plans[0];
-                    localStorage.setItem('active_exploration_id', String(latest.id));
-                    navigate(`/explore/${latest.id}`, { replace: true });
+                const fallback = id ? plans.find(p => String(p.id) !== id) : plans[0];
+                if (fallback) {
+                    localStorage.setItem('active_exploration_id', String(fallback.id));
+                    navigate(`/explore/${fallback.id}`, { replace: true });
                     return;
                 } else if (!isPlansLoading) {
                     // User has 0 explorations in total: stay on /explore and show empty state
@@ -433,7 +508,19 @@ export default function Explore() {
         const submitPrompt = text || prompt;
         if (!submitPrompt.trim()) return;
 
+        justSubmittedRef.current = true;
         setIsCreatingInteraction(true);
+        // Collapse dock upon submission unless the user chose to keep it open in Settings
+        const keepOpen = localStorage.getItem('spacescout_keep_continue_open') === 'true';
+        if (!keepOpen) {
+            setContinueExpanded(false);
+        }
+
+        // Immediately scroll to bottom so the user sees the active mission stream
+        setTimeout(() => {
+            streamEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 50);
+
         try {
             const newInteraction = await createInteraction(plan.id, {
                 user_prompt: submitPrompt,
@@ -462,18 +549,20 @@ export default function Explore() {
     };
 
     const discoveries = plan.discoveries || [];
-    
+
     const followUpDiscoveryIds = new Set<number>();
-    interactions.forEach(interaction => {
-        if (interaction.added_discoveries) {
-            interaction.added_discoveries.forEach(id => followUpDiscoveryIds.add(id));
-        }
-    });
+    if (Array.isArray(interactions)) {
+        interactions.forEach(interaction => {
+            if (Array.isArray(interaction?.added_discoveries)) {
+                interaction.added_discoveries.forEach(id => followUpDiscoveryIds.add(id));
+            }
+        });
+    }
     
-    const initialDiscoveries = discoveries.filter(d => !followUpDiscoveryIds.has(d.id));
-    const followUpDiscoveries = discoveries.filter(d => followUpDiscoveryIds.has(d.id));
+    const initialDiscoveries = discoveries.filter(d => d && !followUpDiscoveryIds.has(d.id));
+    const followUpDiscoveries = discoveries.filter(d => d && followUpDiscoveryIds.has(d.id));
     
-    const sources = [...new Set(discoveries.map(d => d.source))];
+    const sources = [...new Set(discoveries.map(d => d?.source).filter(Boolean))];
 
     return (
         <div className="explore-layout">
@@ -530,7 +619,7 @@ export default function Explore() {
                 )}
 
                 {followUpDiscoveries.length > 0 && (
-                    <>
+                    <div id="follow-up-discoveries-section">
                         <div className="feed-label" style={{ marginTop: '24px' }}>
                             <span className="feed-label__text">Follow-up Discoveries</span>
                             <span className="feed-label__line"></span>
@@ -542,7 +631,8 @@ export default function Explore() {
                                 <DiscoveryCard key={discovery.id} discovery={discovery} />
                             ))}
                         </div>
-                    </>
+                        <div id="follow-up-discoveries-bottom" style={{ height: '1px', width: '100%' }} />
+                    </div>
                 )}
 
                 {discoveries.length === 0 && interactions.length === 0 && (
@@ -586,52 +676,88 @@ export default function Explore() {
                         </div>
                     )}
                 </div>
+
+                {/* Bottom anchor for scrolling */}
+                <div ref={streamEndRef} style={{ height: '1px', width: '100%' }} />
             </div>
 
-            {/* Continue pane */}
-            <div className={`continue-pane ${continueExpanded ? 'expanded' : ''}`}>
-                <div className="continue-pane__bar" onClick={() => setContinueExpanded(!continueExpanded)}>
-                    <span className="continue-pane__bar-label">Continue this exploration</span>
-                    <svg className="continue-pane__chevron" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ transform: continueExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                        <path d="m6 9 6 6 6-6" />
-                    </svg>
-                </div>
-                <div className="continue-pane__body" style={{ display: continueExpanded ? 'block' : 'none' }}>
-                    <div className="continue-pane__inner">
-                        <div className="chips">
-                            <button className="chip chip-action" onClick={() => setPrompt('Find more like these')} disabled={isCreatingInteraction}>Find more like these</button>
-                            <button className="chip chip-action" onClick={() => setPrompt('All hazardous objects')} disabled={isCreatingInteraction}>All hazardous objects</button>
-                            <button className="chip chip-action" onClick={() => setPrompt('More on 2024 YR4')} disabled={isCreatingInteraction}>More on 2024 YR4</button>
-                            <button className="chip chip-action" onClick={() => setPrompt('Deep dive on Bennu')} disabled={isCreatingInteraction}>Deep dive on Bennu</button>
+            {/* Sticky Floating Continue Dock */}
+            <div className="continue-dock-wrapper" ref={dockRef}>
+                <div className={`continue-dock ${continueExpanded ? 'expanded' : ''}`}>
+                    {/* Upper Drawer: Suggestion Chips (Visible when expanded) */}
+                    <div className="continue-dock__drawer">
+                        <div className="continue-dock__drawer-header">
+                            <span className="continue-dock__drawer-title">
+                                <Sparkles size={13} color="var(--blue)" />
+                                Suggested follow-ups
+                            </span>
+                            <button
+                                type="button"
+                                className="continue-dock__close-btn"
+                                onClick={() => setContinueExpanded(false)}
+                                title="Collapse (Esc)"
+                            >
+                                <ChevronDown size={14} />
+                            </button>
                         </div>
-                        <div className="continue-input-row" style={{ display: 'flex', gap: '8px' }}>
-                            <input 
-                                type="text" 
-                                className="continue-input" 
-                                placeholder="What would you like to explore next?" 
-                                style={{ flex: 1 }} 
+                        <div className="chips continue-dock__chips">
+                            {dynamicChips.map((chipText, idx) => (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    className="chip chip-action"
+                                    onClick={() => setPrompt(chipText)}
+                                    disabled={isCreatingInteraction}
+                                >
+                                    {chipText}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Lower Dock Bar: Input + Actions */}
+                    <div className="continue-dock__bar">
+                        <button
+                            type="button"
+                            className="continue-dock__toggle-btn"
+                            onClick={() => setContinueExpanded(prev => !prev)}
+                            title={continueExpanded ? "Collapse suggestions" : "Show suggestions"}
+                        >
+                            <Sparkles size={14} className="continue-dock__toggle-icon" />
+                            <ChevronUp 
+                                size={14} 
+                                className={`continue-dock__chevron ${continueExpanded ? 'rotated' : ''}`} 
+                            />
+                        </button>
+
+                        <div className="continue-dock__input-wrap">
+                            <input
+                                type="text"
+                                className="continue-dock__input"
+                                placeholder="Continue mission: ask a follow-up or explore next..."
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
+                                onFocus={() => setContinueExpanded(true)}
                                 onKeyDown={handleKeyDown}
                                 disabled={isCreatingInteraction}
                             />
-                            <button 
-                                className="btn-explore" 
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                                onClick={() => handleCreateInteraction('other')}
-                                disabled={isCreatingInteraction || !prompt.trim()}
-                            >
-                                {isCreatingInteraction ? <Loader2 size={15} className="spinner" /> : (
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <circle cx="11" cy="11" r="8" />
-                                        <path d="m21 21-4.35-4.35" />
-                                    </svg>
-                                )}
-                                Explore
-                            </button>
                         </div>
+
+                        <button
+                            type="button"
+                            className="btn btn-primary continue-dock__submit-btn"
+                            onClick={() => handleCreateInteraction('other')}
+                            disabled={isCreatingInteraction || !prompt.trim()}
+                        >
+                            {isCreatingInteraction ? (
+                                <Loader2 size={15} className="spinner" />
+                            ) : (
+                                <>
+                                    <span>Explore</span>
+                                    <Send size={13} />
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
             </div>

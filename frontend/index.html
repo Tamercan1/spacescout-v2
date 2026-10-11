@@ -2,9 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/spacescout-logo.png" />
+    <link rel="icon" type="image/png" href="/spacescout-logo.png" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="/spacescout-logo-light.png" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/spacescout-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SpaceScout - AI Space Planner</title>
+    <script>
+      try {
+        const savedTheme = localStorage.getItem('spacescout_theme');
+        if (savedTheme === 'dark') {
+          document.documentElement.classList.add('theme-dark');
+        } else if (savedTheme === 'light') {
+          document.documentElement.classList.add('theme-light');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
