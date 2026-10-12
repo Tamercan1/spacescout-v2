@@ -10,8 +10,8 @@ module-level registry instance. New tools register themselves
 by calling registry.register(tool_instance).
 
 Adding a new NASA tool requires:
-    1. Create a new BaseTool subclass (e.g. MarsRoverTool)
-    2. Register it: registry.register(MarsRoverTool())
+    1. Create a new BaseTool subclass (e.g. ExoplanetArchiveTool)
+    2. Register it: registry.register(ExoplanetArchiveTool())
     3. The orchestrator can now use it — no orchestrator changes needed.
 
 The existing V1 tool_registry dict in tool_registry.py is preserved.

@@ -1,5 +1,5 @@
-// src/pages/NotFound.tsx
 import React from 'react';
+import { Link } from 'react-router-dom';
 import "../styles/NotFound.css";
 
 const NotFound: React.FC = () => {
@@ -11,7 +11,7 @@ const NotFound: React.FC = () => {
       <p>
         Oops! The page you are looking for doesn't exist, has been removed, or is temporarily unavailable.
       </p>
-      <a href="/">Home</a>
+      <Link to="/">Home</Link>
     </div>
   );
 };

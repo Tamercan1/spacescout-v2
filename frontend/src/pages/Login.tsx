@@ -23,7 +23,7 @@ function Login() {
         try {
             await loginUser(username, password);
             console.log("User logged in");
-            navigate("/planner")
+            navigate("/");
         }
         catch {
             setError("Invalid username or password");

@@ -29,8 +29,12 @@ function Register() {
             if (password === confirmPassword) {
                 await register(username, password);
                 console.log("User successfully registered");
-                loginUser(username, password)
-                navigate("/planner")
+                try {
+                    await loginUser(username, password);
+                    navigate("/");
+                } catch {
+                    setError("Account created, but automatic sign-in failed. Please sign in directly.");
+                }
             }
             else {
                 setError("Password must match");

@@ -1,4 +1,8 @@
+import { useNavigate } from "react-router-dom";
+
 export default function Onboarding() {
+    const navigate = useNavigate();
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: 'var(--base)' }}>
             <div className="card" style={{ padding: '40px', maxWidth: '500px', width: '100%', textAlign: 'center', background: 'var(--surface)' }}>
@@ -6,7 +10,11 @@ export default function Onboarding() {
                 <p style={{ fontSize: '0.95rem', color: 'var(--text-2)', marginBottom: '32px' }}>
                     SpaceScout helps you explore space through natural language. Let's get started.
                 </p>
-                <button className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
+                <button
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '12px' }}
+                    onClick={() => navigate('/')}
+                >
                     Start Exploring
                 </button>
             </div>
