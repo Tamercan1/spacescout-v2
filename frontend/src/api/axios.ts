@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 
 const getApiBaseUrl = (): string => {
     if (import.meta.env.VITE_API_URL) {
@@ -41,55 +41,103 @@ api.interceptors.request.use(
     }   
 )
 
-// for error 401 unauthorized error - expired token
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+    _retry?: boolean;
+}
+
+// Module-level in-flight refresh promise to prevent duplicate concurrent refresh requests
+let refreshPromise: Promise<string> | null = null;
+
+// Helper to clear stale credentials and notify auth context without duplication
+function clearSessionAndNotify() {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("spacescout:session_expired"));
+    }
+}
+
+// for error 401 unauthorized error - expired token with retry protection
 api.interceptors.response.use(
     (response) => response,
 
-    async (error) => {
+    async (error: unknown) => {
+        const axiosError = error as {
+            config?: RetryableRequestConfig;
+            response?: { status?: number };
+            url?: string;
+        } | null | undefined;
 
-        // if expired token, get the original request and retry with new access token
-        const originalRequest = error.config;
-
-        if (error.response.status !== 401) {
+        // Safely check error.response: do not assume it exists (handles network errors, timeouts, etc.)
+        if (!axiosError?.response || axiosError.response.status !== 401) {
             return Promise.reject(error);
         }
 
-        if (originalRequest.url.includes("/auth/token/")) {
+        const originalRequest = axiosError.config;
+
+        // If request config is missing or has already been retried, do not loop
+        if (!originalRequest || originalRequest._retry) {
+            if (originalRequest?._retry) {
+                // Already retried once and still 401: session is invalid
+                clearSessionAndNotify();
+            }
+            return Promise.reject(error);
+        }
+
+        // Avoid intercepting auth/public endpoints to preserve normal handling
+        if (
+            typeof originalRequest.url === "string" &&
+            (originalRequest.url.includes("/auth/token/") || originalRequest.url.includes("/register/"))
+        ) {
             return Promise.reject(error);
         }
 
         const refreshToken = localStorage.getItem("refresh_token");
-
         if (!refreshToken) {
+            // Non-auth request returned 401 with no refresh token: session is invalid/stale
+            clearSessionAndNotify();
             return Promise.reject(error);
         }
 
-        // retry the original request with new token
+        // Mark as retried so this request cannot trigger another refresh cycle
+        originalRequest._retry = true;
+
         try {
-            const response = await authApi.post<{ access: string }>(
-                "/auth/token/refresh/",
-                {
-                    refresh: refreshToken
+            // Deduplicate concurrent refresh calls: share in-flight refresh promise
+            if (!refreshPromise) {
+                refreshPromise = authApi.post<{ access: string }>(
+                    "/auth/token/refresh/",
+                    {
+                        refresh: refreshToken
+                    }
+                ).then((response) => {
+                    const newAccessToken = response.data.access;
+                    localStorage.setItem("access_token", newAccessToken);
+                    return newAccessToken;
+                }).catch((refreshError: unknown) => {
+                    clearSessionAndNotify();
+                    return Promise.reject(refreshError);
+                }).finally(() => {
+                    refreshPromise = null;
+                });
+            }
+
+            const newAccessToken = await refreshPromise;
+
+            // Update Authorization header on original request
+            if (originalRequest.headers) {
+                if (typeof (originalRequest.headers as { set?: unknown }).set === "function") {
+                    (originalRequest.headers as { set: (k: string, v: string) => void }).set("Authorization", `Bearer ${newAccessToken}`);
+                } else {
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
                 }
-            )
-
-            const newAccessToken = response.data.access;
-
-            // set the new access token to localstorage
-            localStorage.setItem("access_token", newAccessToken);
-            
-            // resend the original request
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            }
 
             return api(originalRequest);
-        }
-        catch (refreshError) {
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("refresh_token");
-
+        } catch (refreshError: unknown) {
             return Promise.reject(refreshError);
         }
     }
-)
+);
 
-export default api
+export default api;

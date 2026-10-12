@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
     Compass, Layers, MessageSquare, Loader2,
     Sparkles, Orbit, CheckCircle2, AlertCircle, RefreshCw,
-    ChevronUp, ChevronDown, Send
+    ChevronUp, ChevronDown, Send, X
 } from 'lucide-react';
 import { getSpacePlan, createSpacePlan, createInteraction } from '../api/planner';
 import { usePlans } from '../context/PlansContext';
@@ -42,6 +42,7 @@ export default function Explore() {
     const [prompt, setPrompt] = useState("");
     const [emptyPrompt, setEmptyPrompt] = useState("");
     const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
+    const [followUpError, setFollowUpError] = useState<string | null>(null);
 
     const loadedPlanIdRef = useRef<number | null>(null);
     const dockRef = useRef<HTMLDivElement>(null);
@@ -510,6 +511,11 @@ export default function Explore() {
 
         justSubmittedRef.current = true;
         setIsCreatingInteraction(true);
+        setFollowUpError(null);
+        if (!prompt) {
+            setPrompt(submitPrompt);
+        }
+
         // Collapse dock upon submission unless the user chose to keep it open in Settings
         const keepOpen = localStorage.getItem('spacescout_keep_continue_open') === 'true';
         if (!keepOpen) {
@@ -534,9 +540,34 @@ export default function Explore() {
             window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
             
             setPrompt("");
-        } catch (err) {
+            setFollowUpError(null);
+        } catch (err: unknown) {
             console.error("Failed to create interaction", err);
-            // Ideally we'd show a toast here, but for now we just log it.
+            const errorObj = err as {
+                response?: { status?: number };
+                message?: string;
+                code?: string;
+            };
+
+            let userMessage = "Unable to process follow-up exploration. Please try again.";
+
+            if (errorObj.code === 'ERR_NETWORK' || errorObj.message?.includes('Network Error')) {
+                userMessage = "Network error: unable to reach the space intelligence service. Please check your connection and try again.";
+            } else if (errorObj.code === 'ECONNABORTED' || errorObj.message?.toLowerCase().includes('timeout')) {
+                userMessage = "Request timed out while analyzing mission parameters. Please try again.";
+            } else if (errorObj.response?.status === 400) {
+                userMessage = "Invalid exploration request. Please refine your question and try again.";
+            } else if (errorObj.response?.status === 401) {
+                userMessage = "Your session has expired. Please sign in again.";
+            } else if (errorObj.response?.status === 404) {
+                userMessage = "The active exploration could not be found.";
+            } else if (errorObj.response?.status === 429) {
+                userMessage = "Too many exploration requests. Please wait a moment before trying again.";
+            } else if (errorObj.response?.status && errorObj.response.status >= 500) {
+                userMessage = "Space intelligence service is temporarily unavailable. Please try again later.";
+            }
+
+            setFollowUpError(userMessage);
         } finally {
             setIsCreatingInteraction(false);
         }
@@ -675,6 +706,28 @@ export default function Explore() {
                             </div>
                         </div>
                     )}
+
+                    {followUpError && (
+                        <div className="interaction-stream" style={{ marginTop: '12px' }}>
+                            <div className="interaction-item">
+                                <div className="interaction-item__context">
+                                    <div className="interaction-item__label">
+                                        <MessageSquare size={14} />
+                                        <span className="interaction-item__type">Follow-up</span>
+                                    </div>
+                                    <div className="interaction-item__prompt">{prompt || "Follow-up query"}</div>
+                                </div>
+                                <div className="result-card" style={{ borderColor: 'var(--red)', background: 'var(--red-dim)' }}>
+                                    <div className="result-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--red)' }}>
+                                        <AlertCircle size={16} /> Exploration follow-up failed
+                                    </div>
+                                    <p style={{ margin: '8px 0 0', fontSize: '0.88rem', color: 'var(--text-2)', lineHeight: '1.5' }}>
+                                        {followUpError}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Bottom anchor for scrolling */}
@@ -715,6 +768,69 @@ export default function Explore() {
                         </div>
                     </div>
 
+                    {/* Follow-up Error Banner */}
+                    {followUpError && (
+                        <div
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '10px',
+                                padding: '8px 16px',
+                                background: 'var(--red-dim, rgba(239, 68, 68, 0.12))',
+                                color: 'var(--red, #ef4444)',
+                                borderBottom: '1px solid var(--border-2)',
+                                fontSize: '0.82rem',
+                                fontWeight: 500
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                                <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{followUpError}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                <button
+                                    type="button"
+                                    onClick={() => handleCreateInteraction('other')}
+                                    disabled={isCreatingInteraction || !prompt.trim()}
+                                    style={{
+                                        background: 'transparent',
+                                        border: '1px solid var(--red, #ef4444)',
+                                        color: 'var(--red, #ef4444)',
+                                        padding: '2px 8px',
+                                        borderRadius: 'var(--radius-sm, 4px)',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        fontWeight: 600
+                                    }}
+                                >
+                                    <RefreshCw size={11} />
+                                    <span>Retry</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFollowUpError(null)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: 'inherit',
+                                        cursor: 'pointer',
+                                        padding: '2px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        opacity: 0.8
+                                    }}
+                                    title="Dismiss"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Lower Dock Bar: Input + Actions */}
                     <div className="continue-dock__bar">
                         <button
@@ -736,7 +852,10 @@ export default function Explore() {
                                 className="continue-dock__input"
                                 placeholder="Continue mission: ask a follow-up or explore next..."
                                 value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
+                                onChange={(e) => {
+                                    setPrompt(e.target.value);
+                                    if (followUpError) setFollowUpError(null);
+                                }}
                                 onFocus={() => setContinueExpanded(true)}
                                 onKeyDown={handleKeyDown}
                                 disabled={isCreatingInteraction}

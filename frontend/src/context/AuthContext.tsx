@@ -40,6 +40,18 @@ export function AuthProvider({ children }: {children: ReactNode}) {
         fetchUser();
     }, [isAuthenticated]);
 
+    useEffect(() => {
+        const handleSessionExpired = () => {
+            setIsAuthenticated(false);
+            setUser(null);
+        };
+
+        window.addEventListener("spacescout:session_expired", handleSessionExpired);
+        return () => {
+            window.removeEventListener("spacescout:session_expired", handleSessionExpired);
+        };
+    }, []);
+
     const loginUser = async (username: string, password: string) => {
         const tokens = await login(username, password);
 
