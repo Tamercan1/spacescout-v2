@@ -184,7 +184,13 @@ def run_space_planner(user_request, user=None) -> SpacePlan:
             ),
         })
 
-        retry_response = llm_call(messages, response_format=RESPONSE_FORMAT, tool_choice="none")
+        retry_response = llm_call(
+            messages,
+            client_override=active_client,
+            model_list_override=active_models,
+            response_format=RESPONSE_FORMAT,
+            tool_choice="none",
+        )
 
         try:
             retried_data = retry_response.choices[0].message.content

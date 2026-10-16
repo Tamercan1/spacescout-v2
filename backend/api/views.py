@@ -1,22 +1,26 @@
-from .models import User, SpacePlan, Discovery, Interaction, ProviderCredential
-from .app_services.space_plan import save_space_plan
-from .engine.space_planner import run_space_planner
-from .services.credentials import encrypt_credential, generate_key_hint, decrypt_credential
-from .services.provider_validation import validate_provider_credential, ValidationStatus
+import logging
+from django.db.models import Q
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
 
+from .models import User, SpacePlan, Discovery, Interaction, ProviderCredential
+from .app_services.space_plan import save_space_plan
+from .engine.space_planner import run_space_planner
+from .services.credentials import encrypt_credential, generate_key_hint, decrypt_credential
+from .services.provider_validation import validate_provider_credential, ValidationStatus
 from .serializers import (
     UserSerializer, CurrentUserSerializer, UserProfileSerializer,
     SpacePlanSerializer, SpacePlanRequestSerializer,
     InteractionSerializer, InteractionCreateSerializer,
     ProviderCredentialReadSerializer, ProviderCredentialWriteSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 class CreateUserView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -46,7 +50,50 @@ class SpacePlanListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return SpacePlan.objects.filter(user=user).order_by('-created_at')
+        queryset = SpacePlan.objects.filter(user=user).prefetch_related('discoveries__media')
+
+        # Filter by archived status (?archived=true/false or ?is_archived=true/false)
+        archived_param = self.request.query_params.get("archived")
+        if archived_param is None:
+            archived_param = self.request.query_params.get("is_archived")
+
+        if archived_param is not None:
+            val = archived_param.strip().lower()
+            if val in ("true", "1"):
+                queryset = queryset.filter(is_archived=True)
+            elif val in ("false", "0"):
+                queryset = queryset.filter(is_archived=False)
+
+        # Filter by status (?status=pending|processing|completed|failed)
+        status_param = self.request.query_params.get("status")
+        if status_param is not None:
+            status_val = status_param.strip().lower()
+            valid_statuses = [choice[0] for choice in SpacePlan.STATUS_CHOICES]
+            if status_val in valid_statuses:
+                queryset = queryset.filter(status=status_val)
+
+        # Search filter (?search=...)
+        search_query = self.request.query_params.get("search")
+        if search_query:
+            query = search_query.strip()
+            if query:
+                queryset = queryset.filter(
+                    Q(title__icontains=query) | Q(summary__icontains=query)
+                )
+
+        # Ordering (?ordering=...)
+        ordering = self.request.query_params.get("ordering")
+        allowed_orderings = {
+            "created_at", "-created_at",
+            "updated_at", "-updated_at",
+            "title", "-title",
+        }
+        if ordering and ordering.strip() in allowed_orderings:
+            queryset = queryset.order_by(ordering.strip())
+        else:
+            queryset = queryset.order_by("-created_at")
+
+        return queryset
 
 
 class SpacePlanDetailDestroyView(generics.RetrieveUpdateDestroyAPIView):
@@ -68,8 +115,15 @@ class SpacePlanCreateView(generics.CreateAPIView):
 
         prompt = serializer.validated_data["prompt"]
 
-        # Calling the main space plan engine
-        space_plan = run_space_planner(prompt, user=request.user)
+        # Calling the main space plan engine within a targeted error boundary
+        try:
+            space_plan = run_space_planner(prompt, user=request.user)
+        except Exception as exc:
+            logger.error("Space planner execution failed: %s", type(exc).__name__)
+            return Response(
+                {"detail": "Space exploration planner failed to execute. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
 
         # Save it to db
         saved_plan = save_space_plan(

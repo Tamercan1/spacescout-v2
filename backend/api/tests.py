@@ -265,6 +265,182 @@ class SpacePlanTests(TestCase):
         first_call_kwargs = mock_llm_call.call_args_list[0][1]
         self.assertEqual(first_call_kwargs["model_list"][0], "anthropic/claude-3.5-sonnet")
 
+    @patch("api.engine.space_planner.call_llm_with_fallback")
+    @patch("api.services.credentials.get_provider_key")
+    def test_run_space_planner_preserves_overrides_during_retry(self, mock_get_key, mock_llm_call):
+        from api.engine.space_planner import run_space_planner, RESPONSE_FORMAT
+
+        self.user1.profile.preferred_model = "anthropic/claude-3.5-sonnet"
+        self.user1.profile.save()
+        mock_get_key.return_value = "sk-or-v1-custom-user-key"
+
+        # First call fails schema validation (invalid JSON)
+        mock_message_invalid = MagicMock()
+        mock_message_invalid.tool_calls = None
+        mock_message_invalid.content = "INVALID NON-JSON OUTPUT {broken"
+        mock_choice_invalid = MagicMock()
+        mock_choice_invalid.message = mock_message_invalid
+        mock_resp_invalid = MagicMock()
+        mock_resp_invalid.choices = [mock_choice_invalid]
+
+        # Second call (retry) returns valid SpacePlan schema
+        mock_message_valid = MagicMock()
+        mock_message_valid.tool_calls = None
+        mock_message_valid.content = json.dumps({
+            "title": "Retry Plan",
+            "summary": "Retry Plan Summary",
+            "discoveries": []
+        })
+        mock_choice_valid = MagicMock()
+        mock_choice_valid.message = mock_message_valid
+        mock_resp_valid = MagicMock()
+        mock_resp_valid.choices = [mock_choice_valid]
+
+        mock_llm_call.side_effect = [mock_resp_invalid, mock_resp_valid]
+
+        plan = run_space_planner("Investigate Europa", user=self.user1)
+
+        self.assertEqual(plan.title, "Retry Plan")
+        self.assertEqual(mock_llm_call.call_count, 2)
+
+        # First call kwargs
+        first_kwargs = mock_llm_call.call_args_list[0][1]
+        self.assertEqual(first_kwargs["client"].api_key, "sk-or-v1-custom-user-key")
+        self.assertEqual(first_kwargs["model_list"][0], "anthropic/claude-3.5-sonnet")
+
+        # Second call (retry) kwargs - MUST preserve both overrides
+        retry_kwargs = mock_llm_call.call_args_list[1][1]
+        self.assertEqual(retry_kwargs["client"].api_key, "sk-or-v1-custom-user-key")
+        self.assertEqual(retry_kwargs["model_list"][0], "anthropic/claude-3.5-sonnet")
+        self.assertEqual(retry_kwargs["response_format"], RESPONSE_FORMAT)
+        self.assertEqual(retry_kwargs["tool_choice"], "none")
+
+    @patch("api.views.run_space_planner")
+    def test_plan_creation_planner_failure_returns_502(self, mock_planner):
+        from api.engine.space_planner import SpacePlannerError
+        mock_planner.side_effect = SpacePlannerError("All AI models are currently unavailable.")
+
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('space_plan_create_view')
+        response = self.client.post(url, {"prompt": "Explore the cosmos"})
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(
+            response.data,
+            {"detail": "Space exploration planner failed to execute. Please try again."}
+        )
+        self.assertNotIn("All AI models are currently unavailable.", str(response.data))
+        self.assertFalse(SpacePlan.objects.filter(prompt="Explore the cosmos").exists())
+
+    def test_plan_creation_validation_failure_returns_400(self):
+        self.client.force_authenticate(user=self.user1)
+        url = reverse('space_plan_create_view')
+        response = self.client.post(url, {"prompt": ""})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("prompt", response.data)
+
+    def test_plan_list_default_returns_all_ordered_with_prefetch(self):
+        from .models import DiscoveryMedia
+        DiscoveryMedia.objects.create(
+            discovery=self.discovery1,
+            media_type="image",
+            url="https://example.com/img1.jpg",
+            is_primary=True,
+        )
+
+        plan_newer = SpacePlan.objects.create(
+            user=self.user1, title="Newer Plan", prompt="test", status="completed"
+        )
+        disc_newer = Discovery.objects.create(
+            space_plan=plan_newer, title="Newer Disc", type="general", source="general"
+        )
+        DiscoveryMedia.objects.create(
+            discovery=disc_newer,
+            media_type="image",
+            url="https://example.com/img_newer.jpg",
+            is_primary=True,
+        )
+
+        self.client.force_authenticate(user=self.user1)
+
+        # Query count verification: 3 queries (plans, discoveries, discovery_media)
+        with self.assertNumQueries(3):
+            response = self.client.get(self.plans_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]["id"], plan_newer.id)
+        self.assertEqual(response.data[1]["id"], self.plan1.id)
+        self.assertEqual(response.data[0]["discoveries"][0]["media"][0]["url"], "https://example.com/img_newer.jpg")
+
+    def test_plan_list_filtering_archived(self):
+        archived_plan = SpacePlan.objects.create(
+            user=self.user1, title="Archived Plan", prompt="test", is_archived=True
+        )
+
+        self.client.force_authenticate(user=self.user1)
+
+        # Filter ?archived=true
+        resp_archived = self.client.get(self.plans_url, {"archived": "true"})
+        self.assertEqual(resp_archived.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp_archived.data), 1)
+        self.assertEqual(resp_archived.data[0]["id"], archived_plan.id)
+
+        # Filter ?is_archived=1
+        resp_is_archived = self.client.get(self.plans_url, {"is_archived": "1"})
+        self.assertEqual(resp_is_archived.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp_is_archived.data), 1)
+        self.assertEqual(resp_is_archived.data[0]["id"], archived_plan.id)
+
+        # Filter ?archived=false
+        resp_active = self.client.get(self.plans_url, {"archived": "false"})
+        self.assertEqual(resp_active.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp_active.data), 1)
+        self.assertEqual(resp_active.data[0]["id"], self.plan1.id)
+
+    def test_plan_list_filtering_status(self):
+        pending_plan = SpacePlan.objects.create(
+            user=self.user1, title="Pending Plan", prompt="test", status="pending"
+        )
+
+        self.client.force_authenticate(user=self.user1)
+
+        resp_completed = self.client.get(self.plans_url, {"status": "completed"})
+        self.assertEqual(resp_completed.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp_completed.data), 1)
+        self.assertEqual(resp_completed.data[0]["id"], self.plan1.id)
+
+        resp_pending = self.client.get(self.plans_url, {"status": "pending"})
+        self.assertEqual(resp_pending.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp_pending.data), 1)
+        self.assertEqual(resp_pending.data[0]["id"], pending_plan.id)
+
+    def test_plan_list_filtering_search_and_ordering(self):
+        plan_jupiter = SpacePlan.objects.create(
+            user=self.user1, title="Jupiter Moons", prompt="test", summary="Europa exploration"
+        )
+        plan_mars = SpacePlan.objects.create(
+            user=self.user1, title="Mars Rover", prompt="test", summary="Jezero exploration"
+        )
+
+        self.client.force_authenticate(user=self.user1)
+
+        # Search by title
+        resp_title = self.client.get(self.plans_url, {"search": "jupiter"})
+        self.assertEqual(len(resp_title.data), 1)
+        self.assertEqual(resp_title.data[0]["id"], plan_jupiter.id)
+
+        # Search by summary
+        resp_summary = self.client.get(self.plans_url, {"search": "jezero"})
+        self.assertEqual(len(resp_summary.data), 1)
+        self.assertEqual(resp_summary.data[0]["id"], plan_mars.id)
+
+        # Ordering by title ascending
+        resp_ordered = self.client.get(self.plans_url, {"ordering": "title"})
+        titles = [p["title"] for p in resp_ordered.data]
+        self.assertEqual(titles, sorted(titles))
+
 
 from unittest.mock import patch
 
