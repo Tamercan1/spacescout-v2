@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import User, SpacePlan, Discovery, Interaction, ProviderCredential
+from .models import User, UserProfile, SpacePlan, Discovery, Interaction, ProviderCredential
 from .app_services.space_plan import save_space_plan
 from .engine.space_planner import run_space_planner
 from .services.credentials import encrypt_credential, generate_key_hint, decrypt_credential
@@ -43,6 +43,22 @@ class CurrentUserView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(CurrentUserSerializer(request.user).data)
+
+
+class CompleteOnboardingView(APIView):
+    """Mark onboarding as completed for the authenticated user."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = getattr(request.user, "profile", None)
+        if profile is None:
+            profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        if not profile.onboarding_completed_at:
+            profile.onboarding_completed_at = timezone.now()
+            profile.save(update_fields=["onboarding_completed_at"])
+        request.user.profile = profile
+        return Response(CurrentUserSerializer(request.user).data, status=status.HTTP_200_OK)
+
 
 class SpacePlanListView(generics.ListAPIView):
     serializer_class = SpacePlanSerializer

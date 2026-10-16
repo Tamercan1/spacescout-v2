@@ -94,6 +94,22 @@ class CurrentUserTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.username, "testuser")
 
+    def test_complete_onboarding_unauthenticated(self):
+        onboarding_url = reverse('complete_onboarding')
+        response = self.client.post(onboarding_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_complete_onboarding_authenticated(self):
+        self.client.force_authenticate(user=self.user)
+        self.assertIsNone(self.user.profile.onboarding_completed_at)
+        
+        onboarding_url = reverse('complete_onboarding')
+        response = self.client.post(onboarding_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(response.data["profile"]["onboarding_completed_at"])
+        
+        self.user.profile.refresh_from_db()
+        self.assertIsNotNone(self.user.profile.onboarding_completed_at)
 
 
 class SpacePlanTests(TestCase):

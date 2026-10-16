@@ -31,7 +31,7 @@ function Register() {
                 console.log("User successfully registered");
                 try {
                     await loginUser(username, password);
-                    navigate("/");
+                    navigate("/onboarding");
                 } catch {
                     setError("Account created, but automatic sign-in failed. Please sign in directly.");
                 }

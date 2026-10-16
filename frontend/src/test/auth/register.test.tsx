@@ -48,7 +48,7 @@ describe('Register Page', () => {
         expect(mockLoginUser).not.toHaveBeenCalled();
     });
 
-    it('awaits automatic login and navigates to root upon successful registration', async () => {
+    it('awaits automatic login and navigates to onboarding upon successful registration', async () => {
         vi.mocked(authApi.register).mockResolvedValueOnce({
             id: 2,
             username: 'stargazer',
@@ -69,7 +69,7 @@ describe('Register Page', () => {
         await waitFor(() => {
             expect(authApi.register).toHaveBeenCalledWith('stargazer', 'securePass123');
             expect(mockLoginUser).toHaveBeenCalledWith('stargazer', 'securePass123');
-            expect(mockNavigate).toHaveBeenCalledWith('/');
+            expect(mockNavigate).toHaveBeenCalledWith('/onboarding');
         });
     });
 
