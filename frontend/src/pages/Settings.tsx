@@ -1,9 +1,43 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useCredentials } from "../context/CredentialsContext";
 import { User, Key, Settings as SettingsIcon, CheckCircle2, AlertCircle, RefreshCw, XCircle, ExternalLink } from 'lucide-react';
 import { updateUserProfile } from "../api/user";
 import type { ProviderCredential } from "../types/credentials";
+
+function getLocalFallbackTheme(): 'dark' | 'light' {
+    if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('spacescout_theme');
+        if (saved === 'dark' || saved === 'light') {
+            return saved;
+        }
+    }
+    if (typeof document !== 'undefined' && document.documentElement.classList.contains('theme-dark')) {
+        return 'dark';
+    }
+    return 'light';
+}
+
+function isValidServerTheme(t?: string | null): t is 'dark' | 'light' {
+    return t === 'dark' || t === 'light';
+}
+
+function applyThemeToDom(newTheme: 'dark' | 'light') {
+    if (typeof document !== 'undefined') {
+        if (newTheme === 'dark') {
+            document.documentElement.classList.add('theme-dark');
+            document.documentElement.classList.remove('theme-light');
+        } else {
+            document.documentElement.classList.add('theme-light');
+            document.documentElement.classList.remove('theme-dark');
+        }
+    }
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spacescout_theme', newTheme);
+    }
+}
+
+const THEME_DEBOUNCE_MS = 400;
 
 export default function Settings() {
     const { user, updateUser } = useAuth();
@@ -115,11 +149,75 @@ export default function Settings() {
         return <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}><AlertCircle size={14} /> Not validated</div>;
     };
 
-    const [theme, setTheme] = useState(() => {
-        const saved = localStorage.getItem('spacescout_theme');
-        if (saved) return saved;
-        return document.documentElement.classList.contains('theme-dark') ? 'dark' : 'light';
+    // Theme Preference State
+    const serverTheme = user?.profile?.theme;
+    const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+        if (isValidServerTheme(serverTheme)) {
+            return serverTheme;
+        }
+        return getLocalFallbackTheme();
     });
+
+    const [savingTheme, setSavingTheme] = useState(false);
+    const [themeError, setThemeError] = useState<string | null>(null);
+
+    const initializedFromServerRef = useRef<boolean>(isValidServerTheme(serverTheme));
+    const lastPersistedThemeRef = useRef<'dark' | 'light'>(
+        isValidServerTheme(serverTheme) ? serverTheme : getLocalFallbackTheme()
+    );
+    const desiredThemeRef = useRef<'dark' | 'light'>(
+        isValidServerTheme(serverTheme) ? serverTheme : getLocalFallbackTheme()
+    );
+    const isSavingRef = useRef<boolean>(false);
+    const hasUserToggledRef = useRef<boolean>(false);
+    const domSynchronizedRef = useRef<boolean>(false);
+    const isMountedRef = useRef<boolean>(true);
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+                debounceTimerRef.current = null;
+                // Flush pending desired theme change immediately on unmount
+                if (desiredThemeRef.current !== lastPersistedThemeRef.current) {
+                    updateUserProfile({ theme: desiredThemeRef.current }).catch((err) => {
+                        console.error("Failed to flush theme preference on unmount", err);
+                    });
+                }
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        // Prevent profile loading or rerenders from overriding the user's active theme
+        if (hasUserToggledRef.current) {
+            return;
+        }
+
+        const currentServerTheme = user?.profile?.theme;
+        if (isValidServerTheme(currentServerTheme)) {
+            if (!domSynchronizedRef.current || currentServerTheme !== theme) {
+                domSynchronizedRef.current = true;
+                initializedFromServerRef.current = true;
+                lastPersistedThemeRef.current = currentServerTheme;
+                desiredThemeRef.current = currentServerTheme;
+                setTheme(currentServerTheme);
+                applyThemeToDom(currentServerTheme);
+            }
+        } else if (user?.profile && !initializedFromServerRef.current) {
+            // Server profile loaded but has no valid theme; keep local fallback and ensure DOM sync
+            initializedFromServerRef.current = true;
+            domSynchronizedRef.current = true;
+            applyThemeToDom(theme);
+        } else if (!domSynchronizedRef.current) {
+            // Initial mount with local fallback
+            domSynchronizedRef.current = true;
+            applyThemeToDom(theme);
+        }
+    }, [user?.profile, theme]);
 
     const [keepContinueOpen, setKeepContinueOpen] = useState(() => {
         return localStorage.getItem('spacescout_keep_continue_open') === 'true';
@@ -131,17 +229,77 @@ export default function Settings() {
         localStorage.setItem('spacescout_keep_continue_open', String(next));
     };
 
-    const toggleTheme = () => {
-        const newTheme = theme === 'dark' ? 'light' : 'dark';
-        setTheme(newTheme);
-        localStorage.setItem('spacescout_theme', newTheme);
-        if (newTheme === 'dark') {
-            document.documentElement.classList.add('theme-dark');
-            document.documentElement.classList.remove('theme-light');
-        } else {
-            document.documentElement.classList.add('theme-light');
-            document.documentElement.classList.remove('theme-dark');
+    const processThemeQueue = async () => {
+        if (isSavingRef.current) {
+            return;
         }
+        if (desiredThemeRef.current === lastPersistedThemeRef.current) {
+            return;
+        }
+        isSavingRef.current = true;
+        if (isMountedRef.current) {
+            setSavingTheme(true);
+        }
+
+        while (desiredThemeRef.current !== lastPersistedThemeRef.current) {
+            // If another debounce timer is active (user recently toggled), yield to the debounce timer
+            if (debounceTimerRef.current) {
+                break;
+            }
+
+            const targetTheme = desiredThemeRef.current;
+            try {
+                const updatedUser = await updateUserProfile({ theme: targetTheme });
+                lastPersistedThemeRef.current = targetTheme;
+                updateUser(updatedUser);
+            } catch (err) {
+                console.error("Failed to persist theme preference", err);
+                // If the user's desired theme is still the one that failed:
+                if (desiredThemeRef.current === targetTheme) {
+                    const recoveryTheme = lastPersistedThemeRef.current;
+                    desiredThemeRef.current = recoveryTheme;
+                    applyThemeToDom(recoveryTheme);
+                    if (isMountedRef.current) {
+                        setTheme(recoveryTheme);
+                        setThemeError("Unable to save theme preference. Reverted to previous theme.");
+                    }
+                    break;
+                }
+                // If desiredThemeRef.current changed while this request was in flight, loop continues
+            }
+        }
+
+        isSavingRef.current = false;
+        if (isMountedRef.current) {
+            setSavingTheme(false);
+        }
+    };
+
+    const toggleTheme = () => {
+        const nextTheme = desiredThemeRef.current === 'dark' ? 'light' : 'dark';
+
+        hasUserToggledRef.current = true;
+        desiredThemeRef.current = nextTheme;
+        setThemeError(null);
+        setTheme(nextTheme);
+        applyThemeToDom(nextTheme);
+
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+        }
+
+        // Zero-API-call caching optimization:
+        // If user rapidly toggled back to the currently persisted theme and no request is in-flight,
+        // cancel persistence entirely!
+        if (desiredThemeRef.current === lastPersistedThemeRef.current && !isSavingRef.current) {
+            return;
+        }
+
+        debounceTimerRef.current = setTimeout(() => {
+            debounceTimerRef.current = null;
+            processThemeQueue();
+        }, THEME_DEBOUNCE_MS);
     };
 
     return (
@@ -470,21 +628,30 @@ export default function Settings() {
                         <h2 className="settings-section__title">Preferences</h2>
                         <p className="settings-section__sub">Customize your SpaceScout experience.</p>
 
-                        <div className="settings-row">
-                            <div>
-                                <div className="settings-row__label">Dark theme</div>
-                                <div className="settings-row__sub">Use dark or light theme</div>
+                        <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                <div>
+                                    <div className="settings-row__label">Dark theme</div>
+                                    <div className="settings-row__sub">Use dark or light theme</div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className={`toggle ${theme === 'dark' ? 'on' : ''}`}
+                                    onClick={toggleTheme}
+                                    aria-label="Toggle dark theme"
+                                    role="switch"
+                                    aria-checked={theme === 'dark'}
+                                    aria-busy={savingTheme}
+                                >
+                                    <div className="toggle__thumb"></div>
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                className={`toggle ${theme === 'dark' ? 'on' : ''}`}
-                                onClick={toggleTheme}
-                                aria-label="Toggle dark theme"
-                                role="switch"
-                                aria-checked={theme === 'dark'}
-                            >
-                                <div className="toggle__thumb"></div>
-                            </button>
+                            {themeError && (
+                                <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <AlertCircle size={14} />
+                                    <span>{themeError}</span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="settings-row">
