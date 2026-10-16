@@ -160,11 +160,17 @@ export default function Onboarding() {
                         <button
                             type="button"
                             className="btn btn-ghost"
-                            style={{ width: '100%', padding: '10px', color: 'var(--text-2)' }}
+                            style={{ width: '100%', padding: '10px', color: 'var(--text-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                             disabled={completing}
                             onClick={handleFinish}
                         >
-                            {completing ? 'Loading...' : 'Skip setup for now'}
+                            {completing ? (
+                                <>
+                                    <Loader2 size={14} className="spinner" /> Loading...
+                                </>
+                            ) : (
+                                'Skip setup for now'
+                            )}
                         </button>
                     </div>
                 )}
@@ -263,7 +269,7 @@ export default function Onboarding() {
                             >
                                 {aiStatus === 'testing' ? (
                                     <>
-                                        <Loader2 size={16} className="animate-spin" /> Verifying...
+                                        <Loader2 size={16} className="spinner" /> Verifying...
                                     </>
                                 ) : (
                                     'Test & Save Connection'
@@ -378,7 +384,7 @@ export default function Onboarding() {
                             >
                                 {nasaStatus === 'testing' ? (
                                     <>
-                                        <Loader2 size={16} className="animate-spin" /> Verifying...
+                                        <Loader2 size={16} className="spinner" /> Verifying...
                                     </>
                                 ) : (
                                     'Test & Save Connection'
@@ -454,8 +460,15 @@ export default function Onboarding() {
                             disabled={completing}
                             onClick={handleFinish}
                         >
-                            {completing ? 'Launching...' : 'Start Exploring'}
-                            {!completing && <ArrowRight size={16} />}
+                            {completing ? (
+                                <>
+                                    <Loader2 size={16} className="spinner" /> Launching...
+                                </>
+                            ) : (
+                                <>
+                                    Start Exploring <ArrowRight size={16} />
+                                </>
+                            )}
                         </button>
                     </div>
                 )}
