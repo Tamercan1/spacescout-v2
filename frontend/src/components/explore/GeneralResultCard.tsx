@@ -23,7 +23,7 @@ export default function GeneralResultCard({ result, addedCount, referencedCount,
     const [isClamped, setIsClamped] = useState(false);
     const [expanded, setExpanded] = useState(false);
 
-    let title = "Response";
+    let title: string;
     let renderContent: React.ReactNode;
 
     const effectiveAddedCount = addedCount ?? discoveryCount ?? 0;

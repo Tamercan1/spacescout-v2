@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { SpacePlan, Interaction } from '../types/planner';
 import {
@@ -33,10 +34,12 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
     const [interactionsCache, setInteractionsCache] = useState<Record<number, Interaction[]>>({});
 
     const plansRef = useRef<SpacePlan[]>([]);
-    plansRef.current = plans;
-
     const interactionsCacheRef = useRef<Record<number, Interaction[]>>({});
-    interactionsCacheRef.current = interactionsCache;
+
+    useEffect(() => {
+        plansRef.current = plans;
+        interactionsCacheRef.current = interactionsCache;
+    }, [plans, interactionsCache]);
 
     const lastFetchedRef = useRef<number | null>(null);
     const inFlightPlansPromiseRef = useRef<Promise<SpacePlan[]> | null>(null);

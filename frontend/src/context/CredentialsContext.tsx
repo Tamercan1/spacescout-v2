@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import type { ProviderCredential, ValidationResponse } from '../types/credentials';
 import {
     getCredentials as apiGetCredentials,
@@ -27,7 +28,9 @@ export function CredentialsProvider({ children }: { children: React.ReactNode })
     const [error, setError] = useState<string | null>(null);
 
     const credentialsRef = useRef<ProviderCredential[]>([]);
-    credentialsRef.current = credentials;
+    useEffect(() => {
+        credentialsRef.current = credentials;
+    }, [credentials]);
 
     const lastFetchedRef = useRef<number | null>(null);
     const inFlightPromiseRef = useRef<Promise<ProviderCredential[]> | null>(null);

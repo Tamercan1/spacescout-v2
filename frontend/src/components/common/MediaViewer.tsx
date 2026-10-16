@@ -18,7 +18,7 @@ export interface MediaViewerProps {
 function getYouTubeEmbedUrl(url: string): string | null {
     try {
         if (!url) return null;
-        const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const ytRegex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
         const match = url.match(ytRegex);
         if (match && match[1]) {
             return `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1`;
@@ -35,7 +35,7 @@ function getYouTubeEmbedUrl(url: string): string | null {
 function getVimeoEmbedUrl(url: string): string | null {
     try {
         if (!url) return null;
-        const vimeoRegex = /(?:vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|album\/(\d+)\/video\/|video\/|)(\d+))/;
+        const vimeoRegex = /(?:vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^/]*)\/videos\/|album\/(\d+)\/video\/|video\/|)(\d+))/;
         const match = url.match(vimeoRegex);
         if (match && match[3]) {
             return `https://player.vimeo.com/video/${match[3]}`;
@@ -74,12 +74,14 @@ export default function MediaViewer({
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+    const [prevUrl, setPrevUrl] = useState(url);
 
     // Reset loading/error state if URL changes
-    useEffect(() => {
+    if (url !== prevUrl) {
+        setPrevUrl(url);
         setIsLoading(true);
         setHasError(false);
-    }, [url]);
+    }
 
     // Handle Escape key listener for Lightbox
     useEffect(() => {

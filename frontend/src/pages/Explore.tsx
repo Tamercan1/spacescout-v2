@@ -129,7 +129,6 @@ export default function Explore() {
     // Progressive animation for creation steps
     useEffect(() => {
         if (!isCreatingNew) return;
-        setCreationStep(0);
         const timer1 = setTimeout(() => setCreationStep(1), 1600);
         const timer2 = setTimeout(() => setCreationStep(2), 3400);
         return () => {
@@ -139,15 +138,20 @@ export default function Explore() {
     }, [isCreatingNew]);
 
     // Handle explicit startFresh request from sidebar "+ New" button
-    useEffect(() => {
-        if (!startFresh) return;
-        localStorage.removeItem('active_exploration_id');
-        loadedPlanIdRef.current = null;
+    const [prevLocationKey, setPrevLocationKey] = useState(location.key);
+    if (startFresh && location.key !== prevLocationKey) {
+        setPrevLocationKey(location.key);
         setPlan(null);
         setInteractions([]);
         setIsLoading(false);
         setIsCreatingNew(false);
         setError(null);
+    }
+
+    useEffect(() => {
+        if (!startFresh) return;
+        localStorage.removeItem('active_exploration_id');
+        loadedPlanIdRef.current = null;
     }, [startFresh]);
 
     // Creation flow when initialPrompt is provided via navigation
@@ -158,6 +162,7 @@ export default function Explore() {
 
         const runCreate = async () => {
             setCreationPrompt(initialPrompt);
+            setCreationStep(0);
             setIsCreatingNew(true);
             setIsLoading(true);
             setError(null);

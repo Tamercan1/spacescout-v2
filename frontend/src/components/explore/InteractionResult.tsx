@@ -72,7 +72,10 @@ export default function InteractionResult({ interaction }: InteractionResultProp
 
     if (typedResponse && 'result_type' in typedResponse) {
         const addedCount = interaction.added_discoveries?.length ?? 0;
-        const targetCount = interaction.target_discoveries?.length ?? (typedResponse as any)?.target_discoveries?.length ?? 0;
+        const responseTargetDiscoveries = 'target_discoveries' in typedResponse && Array.isArray(typedResponse.target_discoveries)
+            ? typedResponse.target_discoveries
+            : undefined;
+        const targetCount = interaction.target_discoveries?.length ?? responseTargetDiscoveries?.length ?? 0;
         const synthesis = (typedResponse.metadata?.synthesis as string | undefined)?.trim();
 
         // In follow-up interactions: if conversational synthesis exists and new discoveries were created,
@@ -96,7 +99,7 @@ export default function InteractionResult({ interaction }: InteractionResultProp
                         }
                     ]
                 },
-                discoveries: (typedResponse as any)?.discoveries || [],
+                discoveries: Array.isArray(typedResponse.discoveries) ? typedResponse.discoveries : [],
                 metadata: typedResponse.metadata || {}
             };
             return <GeneralResultCard result={syntheticAnalysis} addedCount={addedCount} referencedCount={targetCount} />;
