@@ -327,6 +327,23 @@ class TestNASATools(TestCase):
         self.assertEqual(res["explanation"], "Watch the rover descend.")
 
     @patch("api.services.nasa.nasa_services.get")
+    def test_get_astronomy_picture_video_extracts_source_tag(self, mock_nasa_get):
+        from api.services.nasa.nasa_services import get_astronomy_picture
+        mock_nasa_get.return_value = ({
+            "date": "2026-10-16",
+            "title": "Chasing the International Space Station",
+            "explanation": "<b>Explanation:</b> A Falcon 9 rocket climbs into orbit.",
+            "media_type": "video",
+            "url": "https://science.nasa.gov/image-article/apod-2026-october-16-chasing-the-international-space-station/",
+            "basic_html": '<video controls title=""><source src="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2026/october/CRS35-Holland30s1080p.mp4" type="video/mp4"></video>'
+        }, None)
+
+        res = get_astronomy_picture(date="2026-10-16")
+        self.assertEqual(res["media_type"], "video")
+        self.assertEqual(res["image_url"], "https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2026/october/CRS35-Holland30s1080p.mp4")
+        self.assertEqual(res["explanation"], "A Falcon 9 rocket climbs into orbit.")
+
+    @patch("api.services.nasa.nasa_services.get")
     def test_get_astronomy_picture_fallback_to_legacy(self, mock_nasa_get):
         from api.services.nasa.nasa_services import get_astronomy_picture, NASA_APOD_BASIC_URL, NASA_APOD_LEGACY_URL, APIError
         mock_nasa_get.side_effect = [

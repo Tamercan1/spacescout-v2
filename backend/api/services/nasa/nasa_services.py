@@ -118,12 +118,34 @@ def _parse_apod_item(data: dict) -> dict:
     image_url = ""
     if media_type_val == "video":
         basic_html = data.get("basic_html", "")
-        embed_match = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', basic_html)
-        if embed_match:
-            embed_url = embed_match.group(1)
-            if embed_url.startswith("//"):
-                embed_url = f"https:{embed_url}"
-            image_url = embed_url
+
+        # 1. Look for <source src="..."> inside <video> (direct MP4/WebM video stream)
+        source_match = re.search(r'<source[^>]+src=["\']([^"\']+)["\']', basic_html, re.IGNORECASE)
+        # 2. Look for <video src="..."> (direct video attribute)
+        video_match = re.search(r'<video[^>]+src=["\']([^"\']+)["\']', basic_html, re.IGNORECASE)
+        # 3. Look for <iframe src="..."> (embedded players: YouTube, Vimeo, etc.)
+        iframe_match = re.search(r'<iframe[^>]+src=["\']([^"\']+)["\']', basic_html, re.IGNORECASE)
+        # 4. Look for direct video file links in basic_html
+        direct_link_match = re.search(r'https?://[^\s"\'<>]+\.(?:mp4|webm|ogg|mov|m4v)', basic_html, re.IGNORECASE)
+        # 5. Look for YouTube/Vimeo links in basic_html
+        yt_link_match = re.search(r'https?://(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/)|youtu\.be/)[a-zA-Z0-9_-]{11}', basic_html, re.IGNORECASE)
+        vimeo_link_match = re.search(r'https?://(?:player\.)?vimeo\.com/(?:video/)?\d+', basic_html, re.IGNORECASE)
+
+        if source_match:
+            v_url = source_match.group(1).strip()
+            image_url = f"https:{v_url}" if v_url.startswith("//") else v_url
+        elif video_match:
+            v_url = video_match.group(1).strip()
+            image_url = f"https:{v_url}" if v_url.startswith("//") else v_url
+        elif iframe_match:
+            embed_url = iframe_match.group(1).strip()
+            image_url = f"https:{embed_url}" if embed_url.startswith("//") else embed_url
+        elif direct_link_match:
+            image_url = direct_link_match.group(0).strip()
+        elif yt_link_match:
+            image_url = yt_link_match.group(0).strip()
+        elif vimeo_link_match:
+            image_url = vimeo_link_match.group(0).strip()
         else:
             image_url = data.get("url") or data.get("hdurl") or ""
     else:

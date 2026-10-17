@@ -18,8 +18,9 @@ export interface MediaViewerProps {
 function getYouTubeEmbedUrl(url: string): string | null {
     try {
         if (!url) return null;
-        const ytRegex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
-        const match = url.match(ytRegex);
+        const normalized = url.startsWith('//') ? `https:${url}` : url;
+        const ytRegex = /(?:youtu\.be\/|(?:www\.)?(?:youtube\.com|youtube-nocookie\.com)\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([a-zA-Z0-9_-]{11})/;
+        const match = normalized.match(ytRegex);
         if (match && match[1]) {
             return `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1`;
         }
@@ -35,13 +36,14 @@ function getYouTubeEmbedUrl(url: string): string | null {
 function getVimeoEmbedUrl(url: string): string | null {
     try {
         if (!url) return null;
+        const normalized = url.startsWith('//') ? `https:${url}` : url;
         const vimeoRegex = /(?:vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^/]*)\/videos\/|album\/(\d+)\/video\/|video\/|)(\d+))/;
-        const match = url.match(vimeoRegex);
+        const match = normalized.match(vimeoRegex);
         if (match && match[3]) {
             return `https://player.vimeo.com/video/${match[3]}`;
         }
-        if (url.includes('player.vimeo.com/video/')) {
-            return url;
+        if (normalized.includes('player.vimeo.com/video/')) {
+            return normalized;
         }
     } catch {
         // Fall back gracefully
@@ -53,8 +55,22 @@ function getVimeoEmbedUrl(url: string): string | null {
  * Checks whether a URL points directly to an audio/video streaming format.
  */
 function isDirectVideoUrl(url: string): boolean {
-    const cleanUrl = url.split('?')[0].toLowerCase();
-    return cleanUrl.endsWith('.mp4') || cleanUrl.endsWith('.webm') || cleanUrl.endsWith('.ogg') || cleanUrl.endsWith('.mov');
+    const cleanUrl = url.split(/[?#]/)[0].toLowerCase();
+    return (
+        cleanUrl.endsWith('.mp4') ||
+        cleanUrl.endsWith('.webm') ||
+        cleanUrl.endsWith('.ogg') ||
+        cleanUrl.endsWith('.mov') ||
+        cleanUrl.endsWith('.m4v')
+    );
+}
+
+/**
+ * Checks whether a URL is an embeddable web player iframe.
+ */
+function isGenericEmbedUrl(url: string): boolean {
+    const lower = url.toLowerCase();
+    return lower.includes('/embed/') || lower.includes('player.') || lower.includes('/player/');
 }
 
 /**
@@ -116,8 +132,16 @@ export default function MediaViewer({
             return { kind: 'iframe' as const, embedUrl: vimeoEmbed, platform: 'Vimeo' };
         }
 
-        if (isDirectVideoUrl(url) || mediaType === 'video') {
+        if (isDirectVideoUrl(url)) {
             return { kind: 'video' as const, videoUrl: url };
+        }
+
+        if (isGenericEmbedUrl(url)) {
+            return { kind: 'iframe' as const, embedUrl: url, platform: 'Video' };
+        }
+
+        if (mediaType === 'video') {
+            return { kind: 'portal' as const, portalUrl: url };
         }
 
         return { kind: 'image' as const, imageUrl: url };
@@ -159,7 +183,7 @@ export default function MediaViewer({
     return (
         <>
             <div className={`media-viewer ${className}`}>
-                {/* 1. Iframe Video (YouTube / Vimeo) */}
+                {/* 1. Iframe Video (YouTube / Vimeo / Generic Embed) */}
                 {resolved.kind === 'iframe' && (
                     <div className="media-viewer__frame media-viewer__frame--video">
                         {isLoading && (
@@ -192,6 +216,35 @@ export default function MediaViewer({
                             onLoadedData={() => setIsLoading(false)}
                             onError={() => setHasError(true)}
                         />
+                    </div>
+                )}
+
+                {/* 3. External Video Portal / Feature */}
+                {resolved.kind === 'portal' && (
+                    <div className="media-viewer__frame media-viewer__frame--portal">
+                        <div className="media-viewer__portal-backdrop"></div>
+                        <div className="media-viewer__portal-content">
+                            <div className="media-viewer__portal-badge">
+                                <Play size={12} fill="currentColor" />
+                                <span>NASA Video Feature</span>
+                            </div>
+                            <div className="media-viewer__portal-title">
+                                {title || 'Interactive Space Video'}
+                            </div>
+                            <div className="media-viewer__portal-desc">
+                                This astronomy feature includes an interactive video hosted on NASA's portal.
+                            </div>
+                            <a
+                                href={resolved.portalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-primary media-viewer__portal-action"
+                            >
+                                <Play size={14} fill="currentColor" />
+                                <span>Watch Video on NASA</span>
+                                <ExternalLink size={13} />
+                            </a>
+                        </div>
                     </div>
                 )}
 
