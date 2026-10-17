@@ -87,7 +87,7 @@ export default function AppNavbar({ toggleSidebar }: AppNavbarProps) {
                     }}>
                         <div className="account-menu__header" style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--border)' }}>
                             <div className="account-menu__name" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-1)' }}>{user?.username}</div>
-                            <div className="account-menu__email" style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{user?.email || 'user@example.com'}</div>
+                            <div className="account-menu__email" style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{user?.email || 'SpaceScout Explorer'}</div>
                         </div>
                         <Link to="/settings" onClick={() => setMenuOpen(false)} className="account-menu__item" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 14px', fontSize: '0.82rem', color: 'var(--text-2)', cursor: 'pointer' }}>
                             <SettingsIcon size={14} /> Settings

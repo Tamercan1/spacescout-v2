@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useCredentials } from "../context/CredentialsContext";
-import { User, Key, Settings as SettingsIcon, CheckCircle2, AlertCircle, RefreshCw, XCircle, ExternalLink } from 'lucide-react';
+import { User, Key, Settings as SettingsIcon, CheckCircle2, AlertCircle, RefreshCw, XCircle, ExternalLink, LogOut, Info } from 'lucide-react';
 import { updateUserProfile } from "../api/user";
 import type { ProviderCredential } from "../types/credentials";
 
@@ -40,7 +40,7 @@ function applyThemeToDom(newTheme: 'dark' | 'light') {
 const THEME_DEBOUNCE_MS = 400;
 
 export default function Settings() {
-    const { user, updateUser } = useAuth();
+    const { user, updateUser, logoutUser } = useAuth();
     const {
         credentials,
         isLoading: credsLoading,
@@ -354,42 +354,57 @@ export default function Settings() {
                 {activeTab === "account" && (
                     <div className="settings-section">
                         <h2 className="settings-section__title">Account</h2>
-                        <p className="settings-section__sub">Your profile and login information.</p>
+                        <p className="settings-section__sub">Your SpaceScout profile and session status.</p>
 
                         <div className="settings-row">
                             <div>
                                 <div className="settings-row__label">Username</div>
-                                <div className="settings-row__sub">Your display name</div>
+                                <div className="settings-row__sub">Your unique explorer handle</div>
                             </div>
                             <input type="text" className="settings-input" disabled value={user?.username || ''} />
                         </div>
 
                         <div className="settings-row">
                             <div>
-                                <div className="settings-row__label">Email</div>
-                                <div className="settings-row__sub">Used for account recovery</div>
+                                <div className="settings-row__label">Explorer Status</div>
+                                <div className="settings-row__sub">Account membership</div>
                             </div>
-                            <input type="text" className="settings-input" disabled value={user?.email || 'user@example.com'} />
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '20px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.25)', color: 'var(--green, #22c55e)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor' }}></span>
+                                <span>Active Explorer</span>
+                            </div>
                         </div>
 
                         <div className="settings-row">
                             <div>
-                                <div className="settings-row__label">Password</div>
-                                <div className="settings-row__sub">Last changed: never</div>
+                                <div className="settings-row__label">Active Session</div>
+                                <div className="settings-row__sub">Sign out of your account on this device</div>
                             </div>
-                            <button className="btn btn-secondary" style={{ padding: '5px 10px', fontSize: '0.76rem' }}>Change password</button>
+                            <button
+                                type="button"
+                                onClick={() => logoutUser()}
+                                className="btn btn-secondary"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '0.8rem', color: 'var(--red)' }}
+                            >
+                                <LogOut size={14} />
+                                <span>Sign out</span>
+                            </button>
                         </div>
 
-                        <div className="settings-section" style={{ marginTop: '32px' }}>
-                            <h3 className="settings-section__title" style={{ color: 'var(--red)' }}>Danger zone</h3>
-                            <p className="settings-section__sub">Permanent actions. These cannot be undone.</p>
-
-                            <div className="settings-row" style={{ borderColor: 'var(--red-dim)' }}>
-                                <div>
-                                    <div className="settings-row__label">Delete account</div>
-                                    <div className="settings-row__sub">Permanently deletes all explorations and data</div>
-                                </div>
-                                <button className="btn" style={{ border: '1px solid var(--red)', color: 'var(--red)', padding: '5px 10px', fontSize: '0.76rem' }}>Delete account</button>
+                        <div style={{
+                            marginTop: '28px',
+                            padding: '16px 18px',
+                            borderRadius: 'var(--radius, 10px)',
+                            background: 'var(--surface-2, rgba(255, 255, 255, 0.03))',
+                            border: '1px solid var(--border)',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '12px'
+                        }}>
+                            <Info size={18} style={{ color: 'var(--blue)', flexShrink: 0, marginTop: '2px' }} />
+                            <div style={{ fontSize: '0.82rem', lineHeight: '1.5', color: 'var(--text-2)' }}>
+                                <div style={{ fontWeight: 600, color: 'var(--text-1)', marginBottom: '3px' }}>Upcoming Account Features</div>
+                                Google SSO, verified email linking, and self-service password recovery will be integrated in an upcoming update. Currently, your account is authenticated securely via your explorer credentials.
                             </div>
                         </div>
                     </div>
