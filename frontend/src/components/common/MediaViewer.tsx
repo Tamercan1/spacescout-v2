@@ -314,7 +314,7 @@ export default function MediaViewer({
             {/* Lightbox Modal */}
             {isLightboxOpen && resolved.kind === 'image' && (
                 <div
-                    className="media-lightbox"
+                    className="media-lightbox media-viewer__lightbox"
                     onClick={() => setIsLightboxOpen(false)}
                     role="dialog"
                     aria-modal="true"

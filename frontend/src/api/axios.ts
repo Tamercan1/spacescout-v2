@@ -1,9 +1,19 @@
 import axios, { type InternalAxiosRequestConfig } from "axios";
 
 const getApiBaseUrl = (): string => {
-    if (import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
+    const configuredUrl = import.meta.env.VITE_API_URL;
+    if (configuredUrl) {
+        return configuredUrl;
     }
+    // In production builds, do NOT silently fall back to an HTTP localhost or hostname-based URL.
+    if (import.meta.env.PROD) {
+        console.error(
+            "CRITICAL: VITE_API_URL environment variable is not defined for production build. " +
+            "API requests will fail. Please configure VITE_API_URL to point to your backend."
+        );
+        return "";
+    }
+    // Local development fallback
     if (typeof window !== "undefined" && window.location.hostname) {
         return `http://${window.location.hostname}:8000`;
     }

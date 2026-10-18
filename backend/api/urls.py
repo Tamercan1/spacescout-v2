@@ -4,11 +4,13 @@ from .views import (
     SpacePlanListView, SpacePlanDetailDestroyView, SpacePlanCreateView,
     InteractionListCreateView,
     ProviderCredentialListCreateView, ProviderCredentialDestroyView,
-    ProviderCredentialValidateView
+    ProviderCredentialValidateView,
+    HealthCheckView,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
+    path("health/", HealthCheckView.as_view(), name="health_check"),
     path("register/", CreateUserView.as_view(), name="index"),
     path("auth/token/", TokenObtainPairView.as_view(), name="access_token"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="refresh_token"),
@@ -21,4 +23,4 @@ urlpatterns = [
     path("credentials/", ProviderCredentialListCreateView.as_view(), name="credential_list_create"),
     path("credentials/<str:provider>/", ProviderCredentialDestroyView.as_view(), name="credential_destroy"),
     path("credentials/<str:provider>/validate/", ProviderCredentialValidateView.as_view(), name="credential_validate"),
-]
+]

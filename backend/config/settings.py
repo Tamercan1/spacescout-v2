@@ -10,10 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 import secrets
 from pathlib import Path
-import os
 from dotenv import load_dotenv
+import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 load_dotenv()
 
@@ -36,6 +38,14 @@ if not SECRET_KEY:
         raise ValueError("DJANGO_SECRET_KEY must be set in production (DEBUG=False).")
 
 CREDENTIAL_ENCRYPTION_KEY = os.getenv("CREDENTIAL_ENCRYPTION_KEY")
+if not DEBUG:
+    if not CREDENTIAL_ENCRYPTION_KEY:
+        raise ImproperlyConfigured("CREDENTIAL_ENCRYPTION_KEY must be set in production (DEBUG=False).")
+    try:
+        from cryptography.fernet import Fernet
+        Fernet(CREDENTIAL_ENCRYPTION_KEY.encode('utf-8'))
+    except Exception:
+        raise ImproperlyConfigured("CREDENTIAL_ENCRYPTION_KEY must be a valid 32-url-safe base64-encoded bytes string.") from None
 
 ALLOWED_HOSTS = [
     h.strip()
@@ -67,6 +77,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -98,12 +109,23 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "600")),
+            conn_health_checks=True,
+            ssl_require=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -141,6 +163,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 
 # Email
@@ -148,7 +180,10 @@ STATIC_URL = 'static/'
 
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': os.getenv(
+            'EMAIL_BACKEND',
+            'django.core.mail.backends.dummy.EmailBackend' if not DEBUG else 'django.core.mail.backends.console.EmailBackend'
+        ),
     },
 }
 
@@ -186,3 +221,35 @@ CSRF_TRUSTED_ORIGINS = [
     "http://192.168.0.115:5173",
     "http://192.168.0.115:8000",
 ]
+
+csrf_origins_env = os.getenv("CSRF_TRUSTED_ORIGINS")
+if csrf_origins_env:
+    for o in csrf_origins_env.split(","):
+        stripped = o.strip()
+        if stripped and stripped not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(stripped)
+
+# Production security settings
+if not DEBUG:
+    # Render terminates TLS at the proxy and forwards via HTTP with X-Forwarded-Proto header
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() in ("true", "1", "yes")
+
+    # Narrow exemption for container/internal health checks so probes are not redirected
+    SECURE_REDIRECT_EXEMPT = [
+        r'^api/health/$',
+        r'^health/$',
+    ]
+
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+
+    # HSTS (HTTP Strict Transport Security)
+    # For initial deployment on provider-assigned subdomains (*.onrender.com),
+    # HSTS defaults to 0 (disabled) to prevent persistent browser lockouts prior to
+    # live HTTPS verification. Enable via SECURE_HSTS_SECONDS once verified.
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "False").lower() in ("true", "1", "yes")
+    SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "False").lower() in ("true", "1", "yes")

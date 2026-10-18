@@ -24,6 +24,16 @@ class OpenRouterProvider(BaseLLMProvider):
     def __init__(self, user_id: int | None = None):
         self.user_id = user_id
 
+    def _is_byok_key(self) -> bool:
+        """Check if the user has an explicit BYOK key configured for OpenRouter."""
+        if self.user_id:
+            try:
+                user = User.objects.get(id=self.user_id)
+                return bool(get_provider_key(user, "openrouter"))
+            except User.DoesNotExist:
+                pass
+        return False
+
     def _get_api_key(self) -> str:
         """
         Securely retrieves the API key without storing it in instance state longer than necessary.
@@ -45,7 +55,7 @@ class OpenRouterProvider(BaseLLMProvider):
             return app_key
 
         raise ProviderError(
-            "No OpenRouter credential available.",
+            "No AI provider key is configured. Please add your OpenRouter API key in Settings to start exploring.",
             OrchestratorErrorCode.MISSING_CREDENTIAL
         )
 
@@ -74,19 +84,33 @@ class OpenRouterProvider(BaseLLMProvider):
 
         return "openrouter/free"
 
-    def _map_error(self, exc: Exception) -> ProviderError:
-        """Map provider exceptions to generic OrchestratorErrorCode."""
+    def _map_error(self, exc: Exception, is_byok: bool = False) -> ProviderError:
+        """Map provider exceptions to generic OrchestratorErrorCode with user vs shared fallback messaging."""
         if isinstance(exc, (openai.AuthenticationError, openai.PermissionDeniedError)):
-            return ProviderError("Invalid OpenRouter credentials or permission denied.", OrchestratorErrorCode.INVALID_CREDENTIAL)
+            if is_byok:
+                msg = "Your configured OpenRouter API key was rejected or invalid. Please check your key in Settings."
+            else:
+                msg = "Shared AI capacity is temporarily unavailable. You can configure your own OpenRouter API key in Settings to continue exploring, or try again later."
+            return ProviderError(msg, OrchestratorErrorCode.INVALID_CREDENTIAL)
         elif isinstance(exc, openai.RateLimitError):
-            return ProviderError("OpenRouter rate limit exceeded.", OrchestratorErrorCode.PROVIDER_RATE_LIMITED)
+            if is_byok:
+                msg = "Your OpenRouter account rate limit or credit quota has been reached. Please check your OpenRouter account."
+            else:
+                msg = "Shared AI capacity is temporarily unavailable or exhausted. You can configure your own OpenRouter API key in Settings to continue exploring immediately, or try again later."
+            return ProviderError(msg, OrchestratorErrorCode.PROVIDER_RATE_LIMITED)
         elif isinstance(exc, openai.APITimeoutError):
             return ProviderError("OpenRouter API request timed out.", OrchestratorErrorCode.PROVIDER_UNAVAILABLE)
         elif isinstance(exc, openai.APIConnectionError):
             return ProviderError("Network error connecting to OpenRouter.", OrchestratorErrorCode.PROVIDER_UNAVAILABLE)
         elif isinstance(exc, openai.APIStatusError):
-            if exc.status_code >= 500:
-                return ProviderError("OpenRouter service is unavailable.", OrchestratorErrorCode.PROVIDER_UNAVAILABLE)
+            if exc.status_code == 402:
+                if is_byok:
+                    msg = "Your OpenRouter account credits are exhausted. Please add credits to your OpenRouter account."
+                else:
+                    msg = "Shared AI capacity is temporarily unavailable or exhausted. You can configure your own OpenRouter API key in Settings to continue exploring immediately, or try again later."
+                return ProviderError(msg, OrchestratorErrorCode.PROVIDER_RATE_LIMITED)
+            elif exc.status_code >= 500:
+                return ProviderError("OpenRouter service is unavailable. Please try again later.", OrchestratorErrorCode.PROVIDER_UNAVAILABLE)
             elif exc.status_code == 400:
                 error_msg = str(exc).lower()
                 if "context" in error_msg or "length" in error_msg:
@@ -118,11 +142,14 @@ class OpenRouterProvider(BaseLLMProvider):
         model: str | None = None,
     ) -> LLMResponse:
         api_key = self._get_api_key()
+        is_byok = self._is_byok_key()
         resolved_model = self._get_model(model)
 
         client = openai.OpenAI(
             api_key=api_key,
-            base_url="https://openrouter.ai/api/v1"
+            base_url="https://openrouter.ai/api/v1",
+            timeout=60.0,
+            max_retries=1,
         )
 
         kwargs: dict[str, Any] = {
@@ -139,7 +166,7 @@ class OpenRouterProvider(BaseLLMProvider):
         try:
             response = client.chat.completions.create(**kwargs)
         except Exception as e:
-            raise self._map_error(e) from e
+            raise self._map_error(e, is_byok=is_byok) from e
 
         if not response.choices:
             raise ProviderError("OpenRouter returned empty choices.", OrchestratorErrorCode.MODEL_ERROR)

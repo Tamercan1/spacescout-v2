@@ -155,6 +155,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
 
     const deletePlan = useCallback(async (id: number): Promise<void> => {
         await apiDeleteSpacePlan(id);
+        delete interactionsCacheRef.current[id];
         setPlans(prev => prev.filter(p => p.id !== id));
         setInteractionsCache(prev => {
             const next = { ...prev };

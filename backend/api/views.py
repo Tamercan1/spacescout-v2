@@ -1,4 +1,5 @@
 import logging
+from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -10,7 +11,7 @@ from rest_framework.response import Response
 
 from .models import User, UserProfile, SpacePlan, Discovery, Interaction, ProviderCredential
 from .app_services.space_plan import save_space_plan
-from .engine.space_planner import run_space_planner
+from .engine.space_planner import run_space_planner, SpacePlannerError
 from .services.credentials import encrypt_credential, generate_key_hint, decrypt_credential
 from .services.provider_validation import validate_provider_credential, ValidationStatus
 from .serializers import (
@@ -105,9 +106,17 @@ class SpacePlanListView(generics.ListAPIView):
             "title", "-title",
         }
         if ordering and ordering.strip() in allowed_orderings:
-            queryset = queryset.order_by(ordering.strip())
+            clean_ordering = ordering.strip()
+            if clean_ordering in ("created_at", "-created_at"):
+                secondary = "id" if clean_ordering == "created_at" else "-id"
+                queryset = queryset.order_by(clean_ordering, secondary)
+            elif clean_ordering in ("updated_at", "-updated_at"):
+                secondary = "id" if clean_ordering == "updated_at" else "-id"
+                queryset = queryset.order_by(clean_ordering, secondary)
+            else:
+                queryset = queryset.order_by(clean_ordering, "-id")
         else:
-            queryset = queryset.order_by("-created_at")
+            queryset = queryset.order_by("-created_at", "-id")
 
         return queryset
 
@@ -119,6 +128,25 @@ class SpacePlanDetailDestroyView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         user = self.request.user
         return SpacePlan.objects.filter(user=user)
+
+
+DEFAULT_PLANNER_ERROR_MESSAGE = "Space exploration planner failed to execute. Please try again."
+
+def is_safe_user_facing_planner_error(exc: Exception) -> bool:
+    """
+    Determine whether a SpacePlannerError contains a safe, actionable user guidance message
+    (such as BYOK setup instructions or shared capacity limits) rather than internal system/provider traces.
+    """
+    if getattr(exc, "is_user_facing", False):
+        return True
+    msg = str(exc)
+    safe_markers = [
+        "Please add your OpenRouter API key in Settings",
+        "Please check your key in Settings",
+        "Shared AI capacity is temporarily unavailable",
+        "Your OpenRouter account",
+    ]
+    return any(marker in msg for marker in safe_markers)
 
 
 class SpacePlanCreateView(generics.CreateAPIView):
@@ -134,10 +162,18 @@ class SpacePlanCreateView(generics.CreateAPIView):
         # Calling the main space plan engine within a targeted error boundary
         try:
             space_plan = run_space_planner(prompt, user=request.user)
+        except SpacePlannerError as exc:
+            logger.error("Space planner execution failed: %s", type(exc).__name__)
+            # Only expose safe, actionable guidance; redact raw/internal failure details.
+            detail = str(exc) if is_safe_user_facing_planner_error(exc) else DEFAULT_PLANNER_ERROR_MESSAGE
+            return Response(
+                {"detail": detail},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
         except Exception as exc:
             logger.error("Space planner execution failed: %s", type(exc).__name__)
             return Response(
-                {"detail": "Space exploration planner failed to execute. Please try again."},
+                {"detail": DEFAULT_PLANNER_ERROR_MESSAGE},
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
@@ -318,3 +354,36 @@ class ProviderCredentialValidateView(APIView):
                 "validated_at": credential.last_validated_at,
                 "detail": validation_result["detail"]
             }, status=status.HTTP_502_BAD_GATEWAY)
+
+
+# ============================================================
+# HEALTH CHECK VIEW
+# ============================================================
+
+class HealthCheckView(APIView):
+    """
+    Unauthenticated health check endpoint.
+    Performs a lightweight database connectivity query (SELECT 1).
+    Returns HTTP 200 when healthy, or HTTP 503 when the database is unreachable.
+    Never exposes internal database credentials, URLs, or exception traces.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                row = cursor.fetchone()
+                if not row or row[0] != 1:
+                    raise Exception("Database returned invalid health check result")
+            return Response(
+                {"status": "healthy", "database": "connected"},
+                status=status.HTTP_200_OK
+            )
+        except Exception:
+            logger.error("Health check failed: database connectivity error")
+            return Response(
+                {"status": "unhealthy", "database": "disconnected"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )

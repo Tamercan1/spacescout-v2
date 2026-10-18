@@ -79,7 +79,7 @@ describe('MediaViewer Component', () => {
 
         // Should render portal badge and title
         expect(screen.getByText('NASA Video Feature')).toBeInTheDocument();
-        expect(screen.getByText('Chasing the ISS Feature')).toBeInTheDocument();
+        expect(container.querySelector('.media-viewer__portal-title')).toHaveTextContent('Chasing the ISS Feature');
 
         // Should have action button linking to NASA portal
         const watchLink = screen.getByRole('link', { name: /Watch Video on NASA/i });
@@ -113,7 +113,7 @@ describe('MediaViewer Component', () => {
 
         // Lightbox should now be visible
         expect(container.querySelector('.media-viewer__lightbox')).toBeInTheDocument();
-        expect(screen.getByText('Comet Tsuchinshan-ATLAS')).toBeInTheDocument();
+        expect(container.querySelector('.media-lightbox__title')).toHaveTextContent('Comet Tsuchinshan-ATLAS');
 
         // Press Escape to dismiss lightbox
         fireEvent.keyDown(window, { key: 'Escape' });

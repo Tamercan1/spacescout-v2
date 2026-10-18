@@ -16,10 +16,14 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 LLM_MODEL = os.getenv("LLM_MODEL")
 
-client = OpenAI(
-    api_key=OPENROUTER_API_KEY,
-    base_url=OPENROUTER_BASE_URL
-)
+client = None
+if OPENROUTER_API_KEY:
+    client = OpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url=OPENROUTER_BASE_URL,
+        timeout=60.0,
+        max_retries=1,
+    )
 
 MODELS_LIST = []
 
@@ -42,7 +46,9 @@ RESPONSE_FORMAT = {
 
 # For every invalid outputs, we raise this error class
 class SpacePlannerError(Exception):
-    pass
+    def __init__(self, message: str, is_user_facing: bool = False):
+        super().__init__(message)
+        self.is_user_facing = is_user_facing
 
 
 def handle_tool_call(tool_call, user=None):
@@ -79,13 +85,21 @@ def parse_and_validate(content):
     return plan
 
 
-def llm_call(messages, client_override=None, model_list_override=None, response_format=None, tool_choice=None):
+def llm_call(messages, client_override=None, model_list_override=None, response_format=None, tool_choice=None, is_byok=False):
+
+    target_client = client_override or client
+    if target_client is None:
+        raise SpacePlannerError(
+            "No AI provider key is configured. Please add your OpenRouter API key in Settings to start exploring.",
+            is_user_facing=True
+        )
 
     kwargs = {
-        "client": client_override or client, 
-        "messages": messages, 
-        "tools": tools, 
+        "client": target_client,
+        "messages": messages,
+        "tools": tools,
         "model_list": model_list_override or MODELS_LIST,
+        "is_byok": is_byok,
     }
 
     if response_format is not None:
@@ -96,25 +110,48 @@ def llm_call(messages, client_override=None, model_list_override=None, response_
     try:
         return call_llm_with_fallback(**kwargs)
     except AllModelsFailedError as exc:
-        raise SpacePlannerError("All AI models are currently unavailable.") from exc
+        is_user_facing = getattr(exc, "is_user_facing", False)
+        raise SpacePlannerError(str(exc), is_user_facing=is_user_facing) from exc
 
 
 def run_space_planner(user_request, user=None) -> SpacePlan:
 
-    active_client = client
+    active_client = None
+    is_byok = False
     active_models = list(MODELS_LIST)
 
     if user:
         from api.services.credentials import get_provider_key
         user_openrouter_key = get_provider_key(user, "openrouter")
         if user_openrouter_key:
-            active_client = OpenAI(api_key=user_openrouter_key, base_url=OPENROUTER_BASE_URL)
+            active_client = OpenAI(
+                api_key=user_openrouter_key,
+                base_url=OPENROUTER_BASE_URL,
+                timeout=60.0,
+                max_retries=1,
+            )
+            is_byok = True
         if hasattr(user, 'profile') and user.profile.preferred_model:
             preferred = user.profile.preferred_model.strip()
             if preferred:
                 if preferred in active_models:
                     active_models.remove(preferred)
                 active_models.insert(0, preferred)
+
+    if not active_client:
+        env_key = os.getenv("OPENROUTER_API_KEY")
+        if env_key:
+            active_client = OpenAI(
+                api_key=env_key,
+                base_url=OPENROUTER_BASE_URL,
+                timeout=60.0,
+                max_retries=1,
+            )
+        else:
+            raise SpacePlannerError(
+                "No AI provider key is configured. Please add your OpenRouter API key in Settings to start exploring.",
+                is_user_facing=True
+            )
 
     messages = [
         {
@@ -127,7 +164,7 @@ def run_space_planner(user_request, user=None) -> SpacePlan:
         }
     ]
 
-    response = llm_call(messages, client_override=active_client, model_list_override=active_models)
+    response = llm_call(messages, client_override=active_client, model_list_override=active_models, is_byok=is_byok)
     assistant_message = response.choices[0].message
 
     rounds = 0
@@ -146,7 +183,7 @@ def run_space_planner(user_request, user=None) -> SpacePlan:
                 "content": json.dumps(result)
             })
 
-        response = llm_call(messages, client_override=active_client, model_list_override=active_models)
+        response = llm_call(messages, client_override=active_client, model_list_override=active_models, is_byok=is_byok)
         
         assistant_message = response.choices[0].message
 
@@ -164,7 +201,8 @@ def run_space_planner(user_request, user=None) -> SpacePlan:
         client_override=active_client,
         model_list_override=active_models,
         response_format=RESPONSE_FORMAT,
-        tool_choice="none"
+        tool_choice="none",
+        is_byok=is_byok,
     )
 
     final_data = final_response.choices[0].message.content
@@ -190,6 +228,7 @@ def run_space_planner(user_request, user=None) -> SpacePlan:
             model_list_override=active_models,
             response_format=RESPONSE_FORMAT,
             tool_choice="none",
+            is_byok=is_byok,
         )
 
         try:

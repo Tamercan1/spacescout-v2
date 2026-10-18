@@ -9,16 +9,20 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "cryptography>=50.0.2",
+    "dj-database-url>=2.3.0",
     "django>=6.1",
     "django-cors-headers>=4.9.0",
     "djangorestframework>=3.18.0",
     "djangorestframework-simplejwt>=5.5.1",
+    "gunicorn>=23.0.0",
     "httpx>=0.28.1",
     "openai>=3.6.0",
+    "psycopg[binary]>=3.2.0",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
     "requests>=2.34.2",
     "typing>=3.10.0.0",
+    "whitenoise>=6.9.0",
 ]
 
 [project.scripts]
