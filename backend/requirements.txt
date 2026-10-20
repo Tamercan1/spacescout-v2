@@ -91,8 +91,6 @@ truststore==0.10.4 ; sys_platform != 'emscripten'
     # via
     #   httpcore2
     #   httpx2
-typing==3.10.0.0
-    # via backend
 typing-extensions==4.16.0
     # via
     #   anyio
