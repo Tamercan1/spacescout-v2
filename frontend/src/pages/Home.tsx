@@ -5,7 +5,7 @@ import { usePlans } from '../context/PlansContext';
 
 export default function Home() {
     const navigate = useNavigate();
-    const { plans, isLoading: isLoadingRecent } = usePlans();
+    const { plans, isLoading: isLoadingRecent, activeCreation } = usePlans();
     const [prompt, setPrompt] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -13,6 +13,10 @@ export default function Home() {
     const recentPlans = plans.filter(p => !p.is_archived).slice(0, 3);
 
     const handleExplore = (text: string = prompt) => {
+        if (activeCreation.inFlight) {
+            navigate('/explore');
+            return;
+        }
         const query = text.trim();
         if (!query || isSubmitting) return;
         
@@ -57,9 +61,9 @@ export default function Home() {
                         className="btn btn-primary" 
                         style={{ padding: '8px 18px', borderRadius: '99px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
                         onClick={() => handleExplore()}
-                        disabled={!prompt.trim() || isSubmitting}
+                        disabled={activeCreation.inFlight ? false : (!prompt.trim() || isSubmitting)}
                     >
-                        Explore
+                        {activeCreation.inFlight ? 'View Active Mission' : 'Explore'}
                     </button>
                 </div>
             </div>

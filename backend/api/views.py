@@ -166,8 +166,17 @@ class SpacePlanCreateView(generics.CreateAPIView):
             logger.error("Space planner execution failed: %s", type(exc).__name__)
             # Only expose safe, actionable guidance; redact raw/internal failure details.
             detail = str(exc) if is_safe_user_facing_planner_error(exc) else DEFAULT_PLANNER_ERROR_MESSAGE
+            error_code = getattr(exc, "error_code", "")
+            if not error_code and ("add your OpenRouter API key" in detail or "No AI provider key" in detail):
+                from .engine.contracts import OrchestratorErrorCode
+                error_code = OrchestratorErrorCode.MISSING_CREDENTIAL.value
+
+            resp_data = {"detail": detail}
+            if error_code:
+                resp_data["error_code"] = error_code
+
             return Response(
-                {"detail": detail},
+                resp_data,
                 status=status.HTTP_502_BAD_GATEWAY
             )
         except Exception as exc:

@@ -63,7 +63,7 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const { plans, isLoading, error, deletePlan, fetchPlans } = usePlans();
+    const { plans, isLoading, error, deletePlan, fetchPlans, activeCreation } = usePlans();
     const [planToDelete, setPlanToDelete] = useState<SpacePlan | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
@@ -124,6 +124,13 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
     // New exploration click handler
     const handleNewExploration = (e: React.MouseEvent) => {
         e.preventDefault();
+        if (activeCreation.inFlight) {
+            navigate('/explore');
+            if (window.innerWidth <= 768) {
+                closeSidebar();
+            }
+            return;
+        }
         localStorage.removeItem('active_exploration_id');
         navigate('/explore', { state: { startFresh: true } });
         if (window.innerWidth <= 768) {
@@ -216,7 +223,7 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
                                     to="/explore" 
                                     className="sidebar__new" 
                                     onClick={handleNewExploration}
-                                    title="Start new exploration"
+                                    title={activeCreation.inFlight ? "View active exploration" : "Start new exploration"}
                                 >
                                     <Plus size={13} strokeWidth={2.5} /> New
                                 </Link>
@@ -260,7 +267,7 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
                         )}
 
                         {/* Empty State */}
-                        {!isLoading && !error && !hasPlans && (
+                        {!isLoading && !error && !hasPlans && !activeCreation.inFlight && (
                             <div className="sidebar__empty">
                                 <div className="sidebar__empty-icon">
                                     <Compass size={22} />
@@ -278,9 +285,45 @@ export default function AppSidebar({ isOpen, closeSidebar }: AppSidebarProps) {
                             </div>
                         )}
 
-                        {/* Grouped History List */}
-                        {!isLoading && !error && hasPlans && (
+                        {/* Grouped History List & Active Mission Indicator */}
+                        {!isLoading && !error && (hasPlans || activeCreation.inFlight) && (
                             <div style={{ padding: '6px 0 16px' }}>
+                                {activeCreation.inFlight && (
+                                    <div className="sidebar__group">
+                                        <div className="sidebar__group-label">In Progress</div>
+                                        <div
+                                            className="sidebar__item active"
+                                            onClick={() => {
+                                                navigate('/explore');
+                                                if (window.innerWidth <= 768) closeSidebar();
+                                            }}
+                                            role="button"
+                                            tabIndex={0}
+                                            style={{
+                                                borderLeft: '2px solid var(--accent-cyan)',
+                                                background: 'rgba(56, 189, 248, 0.08)'
+                                            }}
+                                        >
+                                            <div className="sidebar__item-title-row">
+                                                <span className="sidebar__item-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius: '50%',
+                                                        backgroundColor: 'var(--accent-cyan)',
+                                                        boxShadow: '0 0 8px var(--accent-cyan)'
+                                                    }} />
+                                                    <span>{activeCreation.prompt ? (activeCreation.prompt.length > 24 ? `${activeCreation.prompt.substring(0, 24)}...` : activeCreation.prompt) : 'Generating mission...'}</span>
+                                                </span>
+                                            </div>
+                                            <div className="sidebar__item-sub">
+                                                <span style={{ color: 'var(--accent-cyan)' }}>Active</span>
+                                                <span>In flight</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {grouped.today.length > 0 && (
                                     <div className="sidebar__group">
                                         <div className="sidebar__group-label">Today</div>

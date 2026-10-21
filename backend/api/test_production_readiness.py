@@ -168,6 +168,22 @@ class PlannerAPIErrorRedactionTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         self.assertEqual(response.json(), {"detail": actionable_msg})
 
+    @patch("api.views.run_space_planner")
+    def test_missing_credential_error_returns_explicit_error_code(self, mock_planner):
+        """Missing credential error returns detail and explicit error_code 'missing_credential'."""
+        msg = "No AI provider key is configured. Please add your OpenRouter API key in Settings to start exploring."
+        mock_planner.side_effect = SpacePlannerError(
+            msg,
+            is_user_facing=True,
+            error_code=OrchestratorErrorCode.MISSING_CREDENTIAL.value
+        )
+        response = self.client.post(self.url, {"prompt": "Explore Europa"})
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(response.json(), {
+            "detail": msg,
+            "error_code": "missing_credential"
+        })
+
 
 class DeterministicOrderingTests(TestCase):
     def setUp(self):

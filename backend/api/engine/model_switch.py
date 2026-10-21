@@ -3,12 +3,15 @@ import logging
 import json
 import openai
 
+from api.engine.contracts import OrchestratorErrorCode
+
 logger = logging.getLogger(__name__)
 
 class AllModelsFailedError(Exception):
-    def __init__(self, message: str, is_user_facing: bool = False):
+    def __init__(self, message: str, is_user_facing: bool = False, error_code: str = ""):
         super().__init__(message)
         self.is_user_facing = is_user_facing
+        self.error_code = error_code
 
 def call_llm_with_fallback(client, messages, tools, model_list, response_format=None, tool_choice=None, is_byok=False):
 
@@ -40,12 +43,14 @@ def call_llm_with_fallback(client, messages, tools, model_list, response_format=
             if is_byok:
                 raise AllModelsFailedError(
                     "Your configured OpenRouter API key was rejected or invalid. Please check your key in Settings.",
-                    is_user_facing=True
+                    is_user_facing=True,
+                    error_code=OrchestratorErrorCode.INVALID_CREDENTIAL.value,
                 ) from exc
             else:
                 raise AllModelsFailedError(
                     "Shared AI capacity is temporarily unavailable. You can configure your own OpenRouter API key in Settings to continue exploring, or try again later.",
-                    is_user_facing=True
+                    is_user_facing=True,
+                    error_code=OrchestratorErrorCode.INVALID_CREDENTIAL.value,
                 ) from exc
 
         except openai.RateLimitError as exc:
@@ -54,12 +59,14 @@ def call_llm_with_fallback(client, messages, tools, model_list, response_format=
             if is_byok:
                 raise AllModelsFailedError(
                     "Your OpenRouter account rate limit or credit quota has been reached. Please check your OpenRouter account.",
-                    is_user_facing=True
+                    is_user_facing=True,
+                    error_code=OrchestratorErrorCode.PROVIDER_RATE_LIMITED.value,
                 ) from exc
             else:
                 raise AllModelsFailedError(
                     "Shared AI capacity is temporarily unavailable or exhausted. You can configure your own OpenRouter API key in Settings to continue exploring immediately, or try again later.",
-                    is_user_facing=True
+                    is_user_facing=True,
+                    error_code=OrchestratorErrorCode.PROVIDER_RATE_LIMITED.value,
                 ) from exc
 
         except Exception as exc:
@@ -72,12 +79,14 @@ def call_llm_with_fallback(client, messages, tools, model_list, response_format=
                 if is_byok:
                     raise AllModelsFailedError(
                         "Your OpenRouter account credits are exhausted. Please add credits to your OpenRouter account.",
-                        is_user_facing=True
+                        is_user_facing=True,
+                        error_code=OrchestratorErrorCode.PROVIDER_RATE_LIMITED.value,
                     ) from exc
                 else:
                     raise AllModelsFailedError(
                         "Shared AI capacity is temporarily unavailable or exhausted. You can configure your own OpenRouter API key in Settings to continue exploring immediately, or try again later.",
-                        is_user_facing=True
+                        is_user_facing=True,
+                        error_code=OrchestratorErrorCode.PROVIDER_RATE_LIMITED.value,
                     ) from exc
 
             if index < len(model_list) - 1:

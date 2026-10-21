@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation, useInRouterContext } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCredentials } from "../context/CredentialsContext";
 import { User, Key, Settings as SettingsIcon, CheckCircle2, AlertCircle, RefreshCw, XCircle, ExternalLink, LogOut, Info } from 'lucide-react';
@@ -39,7 +40,12 @@ function applyThemeToDom(newTheme: 'dark' | 'light') {
 
 const THEME_DEBOUNCE_MS = 400;
 
-export default function Settings() {
+interface SettingsContentProps {
+    locationSearch?: string;
+    locationStateTab?: string | null;
+}
+
+function SettingsContent({ locationSearch = '', locationStateTab = null }: SettingsContentProps) {
     const { user, updateUser, logoutUser } = useAuth();
     const {
         credentials,
@@ -49,7 +55,24 @@ export default function Settings() {
         deleteCredential: deleteCred,
         validateCredential: validateCred,
     } = useCredentials();
-    const [activeTab, setActiveTab] = useState("account");
+
+    const resolveInitialTab = (): string => {
+        const searchParams = new URLSearchParams(locationSearch);
+        const param = searchParams.get('tab') || locationStateTab;
+        if (param === 'credentials' || param === 'preferences' || param === 'account') {
+            return param;
+        }
+        return 'account';
+    };
+
+    const [prevLocationKey, setPrevLocationKey] = useState({ search: locationSearch, tab: locationStateTab });
+    const [activeTab, setActiveTab] = useState(resolveInitialTab);
+
+    if (prevLocationKey.search !== locationSearch || prevLocationKey.tab !== locationStateTab) {
+        setPrevLocationKey({ search: locationSearch, tab: locationStateTab });
+        const param = resolveInitialTab();
+        setActiveTab(param);
+    }
 
     // BYOK Local Input State
     const [openRouterKey, setOpenRouterKey] = useState("");
@@ -690,4 +713,19 @@ export default function Settings() {
             </div>
         </div>
     );
+}
+
+function SettingsInRouter() {
+    const location = useLocation();
+    const locationStateTab = (location.state as { tab?: string } | null)?.tab ?? null;
+    return <SettingsContent locationSearch={location.search} locationStateTab={locationStateTab} />;
+}
+
+export default function Settings() {
+    const inRouter = useInRouterContext();
+    if (inRouter) {
+        return <SettingsInRouter />;
+    }
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    return <SettingsContent locationSearch={search} locationStateTab={null} />;
 }

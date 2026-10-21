@@ -8,6 +8,7 @@ from api.engine.tool_registry import tool_registry, tools
 from api.engine.system_prompt import SYSTEM_PROMPT
 from api.engine.schema import SpacePlan
 from api.engine.model_switch import call_llm_with_fallback, AllModelsFailedError
+from api.engine.contracts import OrchestratorErrorCode
 
 load_dotenv()
 
@@ -46,9 +47,10 @@ RESPONSE_FORMAT = {
 
 # For every invalid outputs, we raise this error class
 class SpacePlannerError(Exception):
-    def __init__(self, message: str, is_user_facing: bool = False):
+    def __init__(self, message: str, is_user_facing: bool = False, error_code: str = ""):
         super().__init__(message)
         self.is_user_facing = is_user_facing
+        self.error_code = error_code
 
 
 def handle_tool_call(tool_call, user=None):
@@ -91,7 +93,8 @@ def llm_call(messages, client_override=None, model_list_override=None, response_
     if target_client is None:
         raise SpacePlannerError(
             "No AI provider key is configured. Please add your OpenRouter API key in Settings to start exploring.",
-            is_user_facing=True
+            is_user_facing=True,
+            error_code=OrchestratorErrorCode.MISSING_CREDENTIAL.value,
         )
 
     kwargs = {
@@ -111,7 +114,8 @@ def llm_call(messages, client_override=None, model_list_override=None, response_
         return call_llm_with_fallback(**kwargs)
     except AllModelsFailedError as exc:
         is_user_facing = getattr(exc, "is_user_facing", False)
-        raise SpacePlannerError(str(exc), is_user_facing=is_user_facing) from exc
+        error_code = getattr(exc, "error_code", "")
+        raise SpacePlannerError(str(exc), is_user_facing=is_user_facing, error_code=error_code) from exc
 
 
 def run_space_planner(user_request, user=None) -> SpacePlan:
@@ -150,7 +154,8 @@ def run_space_planner(user_request, user=None) -> SpacePlan:
         else:
             raise SpacePlannerError(
                 "No AI provider key is configured. Please add your OpenRouter API key in Settings to start exploring.",
-                is_user_facing=True
+                is_user_facing=True,
+                error_code=OrchestratorErrorCode.MISSING_CREDENTIAL.value,
             )
 
     messages = [

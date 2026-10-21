@@ -1,13 +1,24 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { SpacePlan, Interaction } from '../types/planner';
+import type { SpacePlan, Interaction, InteractionCreateRequest } from '../types/planner';
 import {
     getSpacePlans,
     getSpacePlan,
+    createSpacePlan as apiCreateSpacePlan,
     deleteSpacePlan as apiDeleteSpacePlan,
     updateSpacePlan as apiUpdateSpacePlan,
     getInteractions as apiGetInteractions,
+    createInteraction as apiCreateInteraction,
 } from '../api/planner';
+
+export interface ActiveCreationState {
+    inFlight: boolean;
+    prompt: string;
+    step: number;
+    error: string | null;
+    errorCode?: string | null;
+    createdPlanId?: number | null;
+}
 
 interface PlansContextType {
     plans: SpacePlan[];
@@ -21,6 +32,14 @@ interface PlansContextType {
     updatePlan: (id: number, partial: Partial<SpacePlan>) => Promise<SpacePlan>;
     deletePlan: (id: number) => Promise<void>;
     addInteractionToCache: (planId: number, interaction: Interaction, updatedPlan?: SpacePlan) => void;
+
+    // Navigation-safe Active Creation & Interaction tracking
+    activeCreation: ActiveCreationState;
+    createPlan: (prompt: string) => Promise<SpacePlan>;
+    clearActiveCreationError: () => void;
+
+    activeInteractionPlanId: number | null;
+    createPlanInteraction: (planId: number, data: InteractionCreateRequest) => Promise<Interaction>;
 }
 
 const PlansContext = createContext<PlansContextType | undefined>(undefined);
@@ -122,6 +141,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         const promise = (async () => {
             try {
                 const data = await apiGetInteractions(planId);
+                interactionsCacheRef.current[planId] = data;
                 setInteractionsCache(prev => ({
                     ...prev,
                     [planId]: data
@@ -178,6 +198,175 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         }
     }, [updatePlanInCache]);
 
+    // ============================================================
+    // NAVIGATION-SAFE ACTIVE CREATION & INTERACTION STATE
+    // ============================================================
+    const [activeCreation, setActiveCreation] = useState<ActiveCreationState>({
+        inFlight: false,
+        prompt: '',
+        step: 0,
+        error: null,
+        errorCode: null,
+        createdPlanId: null,
+    });
+
+    const inFlightCreationPromiseRef = useRef<Promise<SpacePlan> | null>(null);
+    const inFlightCreationPromptRef = useRef<string>('');
+    const stepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+    const clearStepTimers = useCallback(() => {
+        stepTimersRef.current.forEach(t => clearTimeout(t));
+        stepTimersRef.current = [];
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            stepTimersRef.current.forEach(t => clearTimeout(t));
+        };
+    }, []);
+
+    const clearActiveCreationError = useCallback(() => {
+        setActiveCreation(prev => ({
+            ...prev,
+            error: null,
+            errorCode: null,
+        }));
+    }, []);
+
+    const createPlan = useCallback(async (promptText: string): Promise<SpacePlan> => {
+        const cleanPrompt = promptText.trim();
+        if (!cleanPrompt) {
+            throw new Error("Prompt cannot be empty");
+        }
+
+        // Deduplication: if an active creation is already running, return the shared promise
+        if (inFlightCreationPromiseRef.current) {
+            return inFlightCreationPromiseRef.current;
+        }
+
+        clearStepTimers();
+        inFlightCreationPromptRef.current = cleanPrompt;
+        setActiveCreation({
+            inFlight: true,
+            prompt: cleanPrompt,
+            step: 0,
+            error: null,
+            errorCode: null,
+            createdPlanId: null,
+        });
+
+        // Set up progressive step timers for mission planner animation
+        const timer1 = setTimeout(() => {
+            setActiveCreation(prev => prev.inFlight ? { ...prev, step: 1 } : prev);
+        }, 1600);
+        const timer2 = setTimeout(() => {
+            setActiveCreation(prev => prev.inFlight ? { ...prev, step: 2 } : prev);
+        }, 3400);
+        stepTimersRef.current = [timer1, timer2];
+
+        const creationPromise = (async () => {
+            try {
+                const newPlan = await apiCreateSpacePlan(cleanPrompt);
+                clearStepTimers();
+
+                // Add to plans cache
+                setPlans(prev => {
+                    const filtered = prev.filter(p => p.id !== newPlan.id);
+                    return [newPlan, ...filtered];
+                });
+
+                localStorage.setItem('active_exploration_id', String(newPlan.id));
+                window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
+
+                setActiveCreation({
+                    inFlight: false,
+                    prompt: '',
+                    step: 0,
+                    error: null,
+                    errorCode: null,
+                    createdPlanId: newPlan.id,
+                });
+
+                return newPlan;
+            } catch (err: unknown) {
+                clearStepTimers();
+                const errorObj = err as {
+                    response?: { data?: { detail?: string; error_code?: string } };
+                    message?: string;
+                };
+                const detail = errorObj.response?.data?.detail || errorObj.message || "Failed to create exploration. Please try again.";
+                let errorCode = errorObj.response?.data?.error_code || null;
+
+                if (!errorCode && (detail.toLowerCase().includes("openrouter api key in settings") || detail.toLowerCase().includes("no ai provider key"))) {
+                    errorCode = "missing_credential";
+                }
+
+                setActiveCreation({
+                    inFlight: false,
+                    prompt: cleanPrompt,
+                    step: 0,
+                    error: detail,
+                    errorCode: errorCode,
+                    createdPlanId: null,
+                });
+
+                throw err;
+            } finally {
+                inFlightCreationPromiseRef.current = null;
+                inFlightCreationPromptRef.current = '';
+            }
+        })();
+
+        inFlightCreationPromiseRef.current = creationPromise;
+        return creationPromise;
+    }, [clearStepTimers]);
+
+    const [activeInteractionPlanId, setActiveInteractionPlanId] = useState<number | null>(null);
+    const inFlightInteractionExecRef = useRef<Record<number, Promise<Interaction>>>({});
+
+    const createPlanInteraction = useCallback(async (planId: number, data: InteractionCreateRequest): Promise<Interaction> => {
+        const existing = inFlightInteractionExecRef.current[planId];
+        if (existing) {
+            return existing;
+        }
+
+        setActiveInteractionPlanId(planId);
+
+        const execPromise = (async () => {
+            try {
+                const newInteraction = await apiCreateInteraction(planId, data);
+                let updatedPlan: SpacePlan | undefined;
+                try {
+                    updatedPlan = await getSpacePlan(planId);
+                } catch {
+                    // Non-fatal if detail refetch encounters transient issue
+                }
+
+                if (updatedPlan) {
+                    setPlans(prev => prev.map(p => p.id === planId ? updatedPlan! : p));
+                }
+
+                setInteractionsCache(prev => {
+                    const existingList = prev[planId] || [];
+                    const filtered = existingList.filter(i => i.id !== newInteraction.id);
+                    return {
+                        ...prev,
+                        [planId]: [...filtered, newInteraction]
+                    };
+                });
+
+                window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
+                return newInteraction;
+            } finally {
+                delete inFlightInteractionExecRef.current[planId];
+                setActiveInteractionPlanId(prev => prev === planId ? null : prev);
+            }
+        })();
+
+        inFlightInteractionExecRef.current[planId] = execPromise;
+        return execPromise;
+    }, []);
+
     const value: PlansContextType = {
         plans,
         isLoading,
@@ -190,6 +379,11 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         updatePlan,
         deletePlan,
         addInteractionToCache,
+        activeCreation,
+        createPlan,
+        clearActiveCreationError,
+        activeInteractionPlanId,
+        createPlanInteraction,
     };
 
     return (

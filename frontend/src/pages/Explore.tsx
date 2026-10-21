@@ -3,9 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
     Compass, Layers, MessageSquare, Loader2,
     Sparkles, Orbit, CheckCircle2, AlertCircle, RefreshCw,
-    ChevronUp, ChevronDown, Send, X
+    ChevronUp, ChevronDown, Send, X, Key
 } from 'lucide-react';
-import { getSpacePlan, createSpacePlan, createInteraction } from '../api/planner';
 import { usePlans } from '../context/PlansContext';
 import type { SpacePlan, Interaction, Discovery, InteractionType } from '../types/planner';
 import InteractionStream from '../components/explore/InteractionStream';
@@ -21,8 +20,11 @@ export default function Explore() {
         isLoading: isPlansLoading,
         getPlanById,
         getInteractionsForPlan,
-        addPlan,
-        addInteractionToCache,
+        activeCreation,
+        createPlan,
+        clearActiveCreationError,
+        activeInteractionPlanId,
+        createPlanInteraction,
     } = usePlans();
 
     const navState = location.state as { initialPrompt?: string; startFresh?: boolean } | null;
@@ -32,17 +34,22 @@ export default function Explore() {
     const [plan, setPlan] = useState<SpacePlan | null>(null);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [isLoading, setIsLoading] = useState(!startFresh);
-    const [isCreatingNew, setIsCreatingNew] = useState(Boolean(initialPrompt));
-    const [creationPrompt, setCreationPrompt] = useState(initialPrompt || "");
-    const [creationStep, setCreationStep] = useState(0);
+    const [localPrompt, setLocalPrompt] = useState(initialPrompt || "");
     const [error, setError] = useState<string | null>(null);
     const [continueExpanded, setContinueExpanded] = useState(() => {
         return localStorage.getItem('spacescout_keep_continue_open') === 'true';
     });
     const [prompt, setPrompt] = useState("");
     const [emptyPrompt, setEmptyPrompt] = useState("");
-    const [isCreatingInteraction, setIsCreatingInteraction] = useState(false);
+    const [localIsCreatingInteraction, setLocalIsCreatingInteraction] = useState(false);
     const [followUpError, setFollowUpError] = useState<string | null>(null);
+
+    const isCreatingNew = activeCreation.inFlight;
+    const creationPrompt = activeCreation.prompt || localPrompt;
+    const creationStep = activeCreation.step;
+    const isCreatingInteraction = Boolean(
+        (activeInteractionPlanId && plan && activeInteractionPlanId === plan.id) || localIsCreatingInteraction
+    );
 
     const loadedPlanIdRef = useRef<number | null>(null);
     const dockRef = useRef<HTMLDivElement>(null);
@@ -126,17 +133,6 @@ export default function Explore() {
 
     const creationStartedRef = useRef<string | null>(null);
 
-    // Progressive animation for creation steps
-    useEffect(() => {
-        if (!isCreatingNew) return;
-        const timer1 = setTimeout(() => setCreationStep(1), 1600);
-        const timer2 = setTimeout(() => setCreationStep(2), 3400);
-        return () => {
-            clearTimeout(timer1);
-            clearTimeout(timer2);
-        };
-    }, [isCreatingNew]);
-
     // Handle explicit startFresh request from sidebar "+ New" button
     const [prevLocationKey, setPrevLocationKey] = useState(location.key);
     if (startFresh && location.key !== prevLocationKey) {
@@ -144,8 +140,8 @@ export default function Explore() {
         setPlan(null);
         setInteractions([]);
         setIsLoading(false);
-        setIsCreatingNew(false);
         setError(null);
+        clearActiveCreationError();
     }
 
     useEffect(() => {
@@ -159,48 +155,55 @@ export default function Explore() {
         if (!initialPrompt) return;
         if (creationStartedRef.current === initialPrompt) return;
         creationStartedRef.current = initialPrompt;
+        setLocalPrompt(initialPrompt);
 
         const runCreate = async () => {
-            setCreationPrompt(initialPrompt);
-            setCreationStep(0);
-            setIsCreatingNew(true);
-            setIsLoading(true);
             setError(null);
             try {
-                const newPlan = await createSpacePlan(initialPrompt);
+                const newPlan = await createPlan(initialPrompt);
                 if (!isMountedRef.current) return;
 
-                localStorage.setItem('active_exploration_id', String(newPlan.id));
-                addPlan(newPlan);
                 loadedPlanIdRef.current = newPlan.id;
                 setPlan(newPlan);
                 setInteractions([]);
-                setIsCreatingNew(false);
                 setIsLoading(false);
-                window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
                 navigate(`/explore/${newPlan.id}`, { replace: true, state: {} });
             } catch (err: unknown) {
                 if (!isMountedRef.current) return;
                 console.error("Failed to create exploration", err);
-                const errorObj = err as { response?: { data?: { detail?: string } } };
-                setError(errorObj.response?.data?.detail || "Failed to create exploration. Please try again.");
-                setIsCreatingNew(false);
                 setIsLoading(false);
             }
         };
 
         runCreate();
-    }, [initialPrompt, navigate, addPlan]);
+    }, [initialPrompt, navigate, createPlan]);
 
     // Loading existing plan or handling resumption when no prompt is provided
     useEffect(() => {
         if (initialPrompt || startFresh) return;
 
         const loadOrResume = async () => {
+            // If active creation is in flight, let the mission planner loading UI render
+            if (activeCreation.inFlight) {
+                setIsLoading(false);
+                return;
+            }
+
+            // If active creation failed and no id in URL, let the error card render
+            if (activeCreation.error && !id) {
+                setIsLoading(false);
+                return;
+            }
+
+            // If active creation completed while user was on another route, navigate to it
+            if (activeCreation.createdPlanId && !id) {
+                navigate(`/explore/${activeCreation.createdPlanId}`, { replace: true });
+                return;
+            }
+
             // If already loaded in state, keep it without refetching
             if (id && loadedPlanIdRef.current === parseInt(id, 10)) {
                 setIsLoading(false);
-                setIsCreatingNew(false);
                 return;
             }
 
@@ -285,30 +288,25 @@ export default function Explore() {
         };
 
         loadOrResume();
-    }, [id, initialPrompt, startFresh, navigate, plans, isPlansLoading, getPlanById, getInteractionsForPlan]);
+    }, [id, initialPrompt, startFresh, navigate, plans, isPlansLoading, getPlanById, getInteractionsForPlan, activeCreation]);
 
     const handleRetryCreation = async () => {
-        if (!creationPrompt.trim()) return;
-        setIsCreatingNew(true);
-        setIsLoading(true);
+        const promptToRetry = activeCreation.prompt || creationPrompt;
+        if (!promptToRetry.trim()) return;
+        clearActiveCreationError();
         setError(null);
-        setCreationStep(0);
+        setIsLoading(true);
         try {
-            const newPlan = await createSpacePlan(creationPrompt);
-            localStorage.setItem('active_exploration_id', String(newPlan.id));
-            addPlan(newPlan);
+            const newPlan = await createPlan(promptToRetry);
+            if (!isMountedRef.current) return;
             loadedPlanIdRef.current = newPlan.id;
             setPlan(newPlan);
             setInteractions([]);
-            setIsCreatingNew(false);
             setIsLoading(false);
-            window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
             navigate(`/explore/${newPlan.id}`, { replace: true, state: {} });
         } catch (err: unknown) {
+            if (!isMountedRef.current) return;
             console.error("Failed to create exploration on retry", err);
-            const errorObj = err as { response?: { data?: { detail?: string } } };
-            setError(errorObj.response?.data?.detail || "Failed to create exploration. Please try again.");
-            setIsCreatingNew(false);
             setIsLoading(false);
         }
     };
@@ -409,35 +407,73 @@ export default function Explore() {
     }
 
     // Render creation error or general failure
-    if (error) {
+    const displayError = activeCreation.error || error;
+    const isMissingCred = activeCreation.errorCode === 'missing_credential' ||
+        Boolean(displayError && (
+            displayError.toLowerCase().includes("openrouter api key in settings") ||
+            displayError.toLowerCase().includes("no ai provider key")
+        ));
+
+    if (displayError) {
         return (
             <div className="explore-layout">
-                <div className="explore-empty-wrap">
-                    <div className="explore-empty-card error">
-                        <div className="explore-empty-badge error">
-                            <AlertCircle size={13} />
-                            <span>MISSION FAILED</span>
+                <div className="explore-error-wrap">
+                    <div className="explore-error-view">
+                        <div className={`explore-error-icon-glow ${isMissingCred ? 'warning' : 'error'}`}>
+                            {isMissingCred ? <Key size={32} /> : <AlertCircle size={32} />}
                         </div>
-                        <div className="explore-empty-icon-wrap error">
-                            <AlertCircle size={28} />
-                        </div>
-                        <h2 className="explore-empty-title">Exploration Failed</h2>
-                        <p className="explore-empty-desc">
-                            {error || "An unexpected error occurred while analyzing the cosmos."}
+                        <h2 className="explore-error-title">
+                            {isMissingCred ? 'Connect AI Provider' : 'Exploration Failed'}
+                        </h2>
+                        <p className="explore-error-desc">
+                            {displayError}
                         </p>
-                        <div className="explore-empty-actions">
-                            {creationPrompt ? (
-                                <button className="btn btn-primary" onClick={handleRetryCreation}>
-                                    <RefreshCw size={15} /> Try Again
-                                </button>
+                        <div className="explore-error-actions">
+                            {isMissingCred ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={() => navigate('/settings?tab=credentials')}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                    >
+                                        <Key size={15} /> Set up API keys
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost"
+                                        onClick={() => {
+                                            clearActiveCreationError();
+                                            setError(null);
+                                            navigate('/');
+                                        }}
+                                    >
+                                        Back to Home
+                                    </button>
+                                </>
                             ) : (
-                                <button className="btn btn-primary" onClick={() => navigate('/')}>
-                                    <Compass size={15} /> Start Mission on Home
-                                </button>
+                                <>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={handleRetryCreation}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                    >
+                                        <RefreshCw size={15} /> Try Again
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost"
+                                        onClick={() => {
+                                            clearActiveCreationError();
+                                            setError(null);
+                                            setLocalPrompt('');
+                                        }}
+                                    >
+                                        New Prompt
+                                    </button>
+                                </>
                             )}
-                            <button className="btn btn-secondary" onClick={() => navigate('/explorations')}>
-                                <Layers size={15} /> Browse Archive
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -466,7 +502,7 @@ export default function Explore() {
                         <form
                             onSubmit={(e) => {
                                 e.preventDefault();
-                                if (emptyPrompt.trim()) {
+                                if (emptyPrompt.trim() && !activeCreation.inFlight) {
                                     navigate('/explore', { state: { initialPrompt: emptyPrompt.trim() } });
                                 }
                             }}
@@ -491,7 +527,7 @@ export default function Explore() {
                             <button
                                 type="submit"
                                 className="btn btn-primary"
-                                disabled={!emptyPrompt.trim()}
+                                disabled={!emptyPrompt.trim() || activeCreation.inFlight}
                                 style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
                             >
                                 <Sparkles size={14} /> Explore
@@ -515,7 +551,7 @@ export default function Explore() {
         if (!submitPrompt.trim()) return;
 
         justSubmittedRef.current = true;
-        setIsCreatingInteraction(true);
+        setLocalIsCreatingInteraction(true);
         setFollowUpError(null);
         if (!prompt) {
             setPrompt(submitPrompt);
@@ -533,20 +569,22 @@ export default function Explore() {
         }, 50);
 
         try {
-            const newInteraction = await createInteraction(plan.id, {
+            const newInteraction = await createPlanInteraction(plan.id, {
                 user_prompt: submitPrompt,
                 interaction_type: type
             });
-            // Re-fetch the space plan to instantly load any newly created discoveries
-            const updatedPlan = await getSpacePlan(plan.id);
+            if (!isMountedRef.current) return;
+            const updatedPlan = await getPlanById(plan.id);
+            if (!isMountedRef.current) return;
             setPlan(updatedPlan);
-            setInteractions(prev => [...prev, newInteraction]);
-            addInteractionToCache(plan.id, newInteraction, updatedPlan);
-            window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
-            
+            setInteractions(prev => {
+                const exists = prev.some(i => i.id === newInteraction.id);
+                return exists ? prev : [...prev, newInteraction];
+            });
             setPrompt("");
             setFollowUpError(null);
         } catch (err: unknown) {
+            if (!isMountedRef.current) return;
             console.error("Failed to create interaction", err);
             const errorObj = err as {
                 response?: { status?: number };
@@ -574,7 +612,9 @@ export default function Explore() {
 
             setFollowUpError(userMessage);
         } finally {
-            setIsCreatingInteraction(false);
+            if (isMountedRef.current) {
+                setLocalIsCreatingInteraction(false);
+            }
         }
     };
 

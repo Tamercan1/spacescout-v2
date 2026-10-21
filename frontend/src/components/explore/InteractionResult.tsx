@@ -16,7 +16,7 @@ import NeowsResultCard from './NeowsResultCard';
 import DonkiResultCard from './DonkiResultCard';
 import NasaImagesResultCard from './NasaImagesResultCard';
 import EpicResultCard from './EpicResultCard';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle, Key } from 'lucide-react';
 
 // Central registry for dynamic result cards
 const CardRegistry: {
@@ -57,12 +57,50 @@ export default function InteractionResult({ interaction }: InteractionResultProp
     }
 
     if (status === 'failed') {
+        const isMissingCred = error_code === 'missing_credential';
+        const isInvalidCred = error_code === 'invalid_credential';
+        const isRateLimit = error_code === 'provider_rate_limited' || error_code?.toLowerCase().includes('rate_limit');
+
+        let userMsg = error_code || 'An unexpected error occurred. Please try again.';
+        if (isMissingCred) {
+            userMsg = 'No AI provider key is configured. Please add your OpenRouter API key in Settings to continue exploring.';
+        } else if (isInvalidCred) {
+            userMsg = 'The configured OpenRouter API key was rejected or invalid. Please check your key in Settings.';
+        } else if (response && typeof response === 'object' && 'error' in response && typeof (response as { error?: string }).error === 'string') {
+            const rawErr = (response as { error: string }).error;
+            if (!rawErr.toLowerCase().includes('traceback') && !rawErr.toLowerCase().includes('exception')) {
+                userMsg = rawErr;
+            }
+        }
+
         return (
             <div className="result-card result-card--error">
-                <div className="result-card__title">Request failed</div>
-                <div className="result-card__content">
-                    {error_code || 'An unexpected error occurred. Please try again.'}
+                <div className="result-card__title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={15} color="var(--red)" />
+                    <span>Request failed</span>
                 </div>
+                <div className="result-card__content" style={{ marginTop: '6px', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    {userMsg}
+                </div>
+                {(isMissingCred || isInvalidCred || isRateLimit) && (
+                    <div style={{ marginTop: '10px' }}>
+                        <a
+                            href="/settings?tab=credentials"
+                            className="btn btn-secondary"
+                            style={{
+                                fontSize: '0.78rem',
+                                padding: '5px 12px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                textDecoration: 'none'
+                            }}
+                        >
+                            <Key size={13} />
+                            <span>Configure API Keys in Settings</span>
+                        </a>
+                    </div>
+                )}
             </div>
         );
     }
