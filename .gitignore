@@ -1,4 +1,5 @@
 design/
-docs/
+docs/*
+!docs/*.md
 AGENTS.md
-.env
+.env
