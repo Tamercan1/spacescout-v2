@@ -24,6 +24,7 @@ export default function Explore() {
         createPlan,
         clearActiveCreationError,
         activeInteractionPlanId,
+        activeInteractionPrompt,
         createPlanInteraction,
     } = usePlans();
 
@@ -574,7 +575,17 @@ export default function Explore() {
                 interaction_type: type
             });
             if (!isMountedRef.current) return;
-            const updatedPlan = await getPlanById(plan.id);
+
+            let updatedPlan = await getPlanById(plan.id);
+            // Defensively ensure that if the in-memory plan is missing newly added discoveries, force a fresh fetch
+            const newDiscoveryIds = newInteraction.added_discoveries || [];
+            const hasMissingDiscoveries = newDiscoveryIds.some(
+                addId => !updatedPlan.discoveries?.some(d => d.id === addId)
+            );
+            if (hasMissingDiscoveries) {
+                updatedPlan = await getPlanById(plan.id, true);
+            }
+
             if (!isMountedRef.current) return;
             setPlan(updatedPlan);
             setInteractions(prev => {
@@ -736,7 +747,7 @@ export default function Explore() {
                                         <MessageSquare size={14} />
                                         <span className="interaction-item__type">Follow-up</span>
                                     </div>
-                                    <div className="interaction-item__prompt">{prompt || "Generating..."}</div>
+                                    <div className="interaction-item__prompt">{activeInteractionPrompt || prompt || "Generating..."}</div>
                                 </div>
                                 <div className="result-card">
                                     <div className="result-card__title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-2)' }}>

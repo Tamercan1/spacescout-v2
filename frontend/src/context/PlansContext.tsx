@@ -25,7 +25,7 @@ interface PlansContextType {
     isLoading: boolean;
     error: string | null;
     fetchPlans: (force?: boolean) => Promise<SpacePlan[]>;
-    getPlanById: (id: number) => Promise<SpacePlan>;
+    getPlanById: (id: number, force?: boolean) => Promise<SpacePlan>;
     getInteractionsForPlan: (planId: number, force?: boolean) => Promise<Interaction[]>;
     addPlan: (newPlan: SpacePlan) => void;
     updatePlanInCache: (updatedPlan: SpacePlan) => void;
@@ -39,6 +39,7 @@ interface PlansContextType {
     clearActiveCreationError: () => void;
 
     activeInteractionPlanId: number | null;
+    activeInteractionPrompt: string;
     createPlanInteraction: (planId: number, data: InteractionCreateRequest) => Promise<Interaction>;
 }
 
@@ -106,15 +107,22 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         fetchPlans();
     }, [fetchPlans]);
 
-    const getPlanById = useCallback(async (id: number): Promise<SpacePlan> => {
-        // Check in-memory plans first
-        const found = plansRef.current.find(p => p.id === id);
-        if (found) {
-            return found;
+    const getPlanById = useCallback(async (id: number, force = false): Promise<SpacePlan> => {
+        // Check in-memory plans first if not forced
+        if (!force) {
+            const found = plansRef.current.find(p => p.id === id);
+            if (found) {
+                return found;
+            }
         }
 
-        // Fetch detail if not found in current plans list
+        // Fetch detail if not found in current plans list or forced
         const planData = await getSpacePlan(id);
+        const exists = plansRef.current.some(p => p.id === planData.id);
+        plansRef.current = exists
+            ? plansRef.current.map(p => p.id === planData.id ? planData : p)
+            : [planData, ...plansRef.current];
+
         setPlans(prev => {
             const exists = prev.some(p => p.id === planData.id);
             if (exists) {
@@ -157,6 +165,8 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const addPlan = useCallback((newPlan: SpacePlan) => {
+        const filtered = plansRef.current.filter(p => p.id !== newPlan.id);
+        plansRef.current = [newPlan, ...filtered];
         setPlans(prev => {
             const filtered = prev.filter(p => p.id !== newPlan.id);
             return [newPlan, ...filtered];
@@ -164,6 +174,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const updatePlanInCache = useCallback((updatedPlan: SpacePlan) => {
+        plansRef.current = plansRef.current.map(p => p.id === updatedPlan.id ? updatedPlan : p);
         setPlans(prev => prev.map(p => p.id === updatedPlan.id ? updatedPlan : p));
     }, []);
 
@@ -176,6 +187,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
     const deletePlan = useCallback(async (id: number): Promise<void> => {
         await apiDeleteSpacePlan(id);
         delete interactionsCacheRef.current[id];
+        plansRef.current = plansRef.current.filter(p => p.id !== id);
         setPlans(prev => prev.filter(p => p.id !== id));
         setInteractionsCache(prev => {
             const next = { ...prev };
@@ -185,14 +197,15 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const addInteractionToCache = useCallback((planId: number, interaction: Interaction, updatedPlan?: SpacePlan) => {
-        setInteractionsCache(prev => {
-            const existing = prev[planId] || [];
-            const filtered = existing.filter(i => i.id !== interaction.id);
-            return {
-                ...prev,
-                [planId]: [...filtered, interaction]
-            };
-        });
+        const existing = interactionsCacheRef.current[planId] || [];
+        const filtered = existing.filter(i => i.id !== interaction.id);
+        const updatedList = [...filtered, interaction];
+        interactionsCacheRef.current[planId] = updatedList;
+
+        setInteractionsCache(prev => ({
+            ...prev,
+            [planId]: updatedList
+        }));
         if (updatedPlan) {
             updatePlanInCache(updatedPlan);
         }
@@ -322,6 +335,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
     }, [clearStepTimers]);
 
     const [activeInteractionPlanId, setActiveInteractionPlanId] = useState<number | null>(null);
+    const [activeInteractionPrompt, setActiveInteractionPrompt] = useState<string>('');
     const inFlightInteractionExecRef = useRef<Record<number, Promise<Interaction>>>({});
 
     const createPlanInteraction = useCallback(async (planId: number, data: InteractionCreateRequest): Promise<Interaction> => {
@@ -331,6 +345,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         }
 
         setActiveInteractionPlanId(planId);
+        setActiveInteractionPrompt(data.user_prompt);
 
         const execPromise = (async () => {
             try {
@@ -338,28 +353,39 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
                 let updatedPlan: SpacePlan | undefined;
                 try {
                     updatedPlan = await getSpacePlan(planId);
-                } catch {
+                } catch (err) {
                     // Non-fatal if detail refetch encounters transient issue
+                    console.warn(`Failed to refetch plan detail for ${planId}:`, err);
                 }
 
                 if (updatedPlan) {
-                    setPlans(prev => prev.map(p => p.id === planId ? updatedPlan! : p));
+                    const exists = plansRef.current.some(p => p.id === planId);
+                    plansRef.current = exists
+                        ? plansRef.current.map(p => p.id === planId ? updatedPlan! : p)
+                        : [updatedPlan, ...plansRef.current];
+
+                    setPlans(prev => {
+                        const exists = prev.some(p => p.id === planId);
+                        return exists ? prev.map(p => p.id === planId ? updatedPlan! : p) : [updatedPlan, ...prev];
+                    });
                 }
 
-                setInteractionsCache(prev => {
-                    const existingList = prev[planId] || [];
-                    const filtered = existingList.filter(i => i.id !== newInteraction.id);
-                    return {
-                        ...prev,
-                        [planId]: [...filtered, newInteraction]
-                    };
-                });
+                const existingList = interactionsCacheRef.current[planId] || [];
+                const filtered = existingList.filter(i => i.id !== newInteraction.id);
+                const updatedInteractions = [...filtered, newInteraction];
+                interactionsCacheRef.current[planId] = updatedInteractions;
+
+                setInteractionsCache(prev => ({
+                    ...prev,
+                    [planId]: updatedInteractions
+                }));
 
                 window.dispatchEvent(new CustomEvent('spacescout:plans_updated'));
                 return newInteraction;
             } finally {
                 delete inFlightInteractionExecRef.current[planId];
                 setActiveInteractionPlanId(prev => prev === planId ? null : prev);
+                setActiveInteractionPrompt('');
             }
         })();
 
@@ -383,6 +409,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         createPlan,
         clearActiveCreationError,
         activeInteractionPlanId,
+        activeInteractionPrompt,
         createPlanInteraction,
     };
 
