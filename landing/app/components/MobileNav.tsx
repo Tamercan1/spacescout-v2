@@ -23,16 +23,24 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
     setIsOpen(true);
   }, []);
 
-  // Manage focus, Escape key, body scroll locking, and focus trapping
+  // Manage focus, Escape key, scroll locking, and focus trapping
   useEffect(() => {
     if (!isOpen) return;
 
-    // Shift focus into the drawer upon opening
+    // Ensure no horizontal scroll displacement occurred
+    if (typeof window !== 'undefined' && window.scrollX !== 0) {
+      window.scrollTo({ left: 0, top: window.scrollY });
+    }
+
+    // Shift focus into the drawer upon opening without scrolling viewport
     const timer = setTimeout(() => {
-      closeBtnRef.current?.focus();
+      closeBtnRef.current?.focus({ preventScroll: true });
     }, 50);
 
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -52,10 +60,10 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
 
         if (e.shiftKey && document.activeElement === firstElement) {
           e.preventDefault();
-          lastElement.focus();
+          lastElement.focus({ preventScroll: true });
         } else if (!e.shiftKey && document.activeElement === lastElement) {
           e.preventDefault();
-          firstElement.focus();
+          firstElement.focus({ preventScroll: true });
         }
       }
     };
@@ -65,9 +73,10 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
     return () => {
       clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-      // Restore focus to opener button when drawer closes
-      openerRef.current?.focus();
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      // Restore focus to opener button when drawer closes without viewport jump
+      openerRef.current?.focus({ preventScroll: true });
     };
   }, [isOpen, close]);
 
@@ -88,7 +97,6 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
         className="mobile-nav-overlay"
         data-open={isOpen}
         onClick={close}
-        style={{ display: isOpen ? 'block' : 'none' }}
         aria-hidden="true"
       />
 
@@ -97,10 +105,10 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
         ref={panelRef}
         className="mobile-nav-panel"
         data-open={isOpen}
-        style={{ display: isOpen ? 'flex' : undefined }}
         aria-label="Mobile navigation"
         role="dialog"
         aria-modal="true"
+        aria-hidden={!isOpen}
       >
         <div className="mobile-nav-header">
           <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Navigation</span>
