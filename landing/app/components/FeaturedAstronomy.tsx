@@ -12,10 +12,12 @@ import {
 } from 'lucide-react';
 import { getFeaturedAstronomy } from '@/lib/nasa';
 import { getAppUrl } from '@/lib/config';
+import { resolveAstronomyMedia } from '@/lib/media';
 
 export async function FeaturedAstronomySection({ date }: { date?: string } = {}) {
   const item = await getFeaturedAstronomy(date);
   const appUrl = getAppUrl();
+  const media = resolveAstronomyMedia(item.url, item.mediaType);
 
   // Construct exploration URL for the prompt bridge using documented prompt parameter
   const exploreUrl = `${appUrl}/explore?prompt=${encodeURIComponent(
@@ -104,76 +106,51 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
             {/* Media Column */}
             <div className="astronomy-media-col">
               <div className="astronomy-media-wrap">
-                {item.mediaType === 'image' ? (
+                {media.kind === 'image' ? (
                   <AstronomyImage
-                    src={item.url}
+                    src={media.src}
                     alt={item.title}
                   />
-                ) : item.mediaType === 'video' ? (
-                  item.url.includes('youtube.com') ||
-                  item.url.includes('youtu.be') ||
-                  item.url.includes('vimeo.com') ? (
-                    <iframe
-                      src={item.url}
-                      title={item.title}
-                      className="astronomy-video-frame"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        padding: '40px 24px',
-                        textAlign: 'center',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '16px',
-                        color: 'var(--text-1)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: '56px',
-                          height: '56px',
-                          borderRadius: '50%',
-                          background: 'var(--blue-dim)',
-                          color: 'var(--blue)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Video size={28} />
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 600, marginBottom: '6px' }}>
-                          Video Presentation
-                        </div>
-                        <p style={{ fontSize: '0.88rem', color: 'var(--text-2)', maxWidth: '300px' }}>
-                          This NASA feature is an external astronomical video.
-                        </p>
-                      </div>
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-secondary btn-sm"
-                      >
-                        <ExternalLink size={14} />
-                        Watch Video Feed
-                      </a>
-                    </div>
-                  )
-                ) : (
-                  <div
-                    style={{
-                      padding: '40px',
-                      color: 'var(--text-3)',
-                      textAlign: 'center',
-                    }}
+                ) : media.kind === 'youtube' || media.kind === 'vimeo' || media.kind === 'iframe' ? (
+                  <iframe
+                    src={media.embedUrl}
+                    title={item.title}
+                    className="astronomy-video-frame"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : media.kind === 'video' ? (
+                  <video
+                    src={media.videoUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="astronomy-video-player"
                   >
-                    Media format not previewable directly.
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <div className="astronomy-video-portal">
+                    <div className="astronomy-video-portal__icon">
+                      <Video size={28} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: '6px' }}>
+                        Video Presentation
+                      </div>
+                      <p style={{ fontSize: '0.88rem', color: 'var(--text-2)', maxWidth: '300px' }}>
+                        This NASA feature is an external astronomical video.
+                      </p>
+                    </div>
+                    <a
+                      href={media.portalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary btn-sm"
+                    >
+                      <ExternalLink size={14} />
+                      Watch Video Feed
+                    </a>
                   </div>
                 )}
               </div>
@@ -185,7 +162,7 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
                     ? `Credit & Copyright: ${item.copyright}`
                     : 'Image Credit: NASA / Science Operations'}
                 </span>
-                {item.hdUrl && item.mediaType === 'image' && (
+                {item.hdUrl && media.kind === 'image' && (
                   <a
                     href={item.hdUrl}
                     target="_blank"
@@ -212,7 +189,7 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
                   }}
                 >
                   <span className="badge badge-blue">
-                    {item.mediaType === 'video' ? 'NASA Video' : 'NASA APOD'}
+                    {media.kind === 'image' ? 'NASA APOD' : 'NASA Video'}
                   </span>
                   <span
                     style={{
