@@ -1160,3 +1160,49 @@ img {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==============================================================================
+   Accessibility: High-Contrast Focus Visible & Reduced Motion
+   ============================================================================== */
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .pulse-dot {
+    animation: none !important;
+  }
+
+  .mobile-nav-panel {
+    transition: none !important;
+  }
+
+  .mobile-nav-overlay {
+    transition: none !important;
+  }
+
+  .integration-card:hover,
+  .product-card:hover,
+  .arch-card:hover {
+    transform: none !important;
+  }
+}
+

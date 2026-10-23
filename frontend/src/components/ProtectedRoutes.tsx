@@ -10,7 +10,7 @@ function ProtectedRoute() {
     }
 
     if (!isAuthenticated) {
-        return <Navigate to='/login' replace />;
+        return <Navigate to='/login' state={{ from: location }} replace />;
     }
 
     // Authenticated, waiting for profile details to load

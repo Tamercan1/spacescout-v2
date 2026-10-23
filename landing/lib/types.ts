@@ -20,6 +20,9 @@ export interface RawApodResponse {
   url?: string;
   hdurl?: string;
   copyright?: string;
+  credit?: string;
+  basic_html?: string;
+  permalink?: string;
   code?: number;
   msg?: string;
   error?: {

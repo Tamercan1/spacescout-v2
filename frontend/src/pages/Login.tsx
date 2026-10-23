@@ -1,13 +1,14 @@
 import { useState  } from "react";
 import React from "react";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 
 function Login() { 
 
     const { loginUser } = useAuth() // unpack only loginUser function from the auth context
 
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -23,7 +24,13 @@ function Login() {
         try {
             await loginUser(username, password);
             console.log("User logged in");
-            navigate("/");
+            const fromLocation = (location.state as { from?: { pathname: string; search?: string; hash?: string } })?.from;
+            if (fromLocation) {
+                const redirectTarget = `${fromLocation.pathname}${fromLocation.search || ''}${fromLocation.hash || ''}`;
+                navigate(redirectTarget, { replace: true });
+            } else {
+                navigate("/");
+            }
         }
         catch {
             setError("Invalid username or password");
@@ -77,7 +84,7 @@ function Login() {
                 </form>
 
                 <div style={{ marginTop: '24px', fontSize: '0.85rem', color: 'var(--text-2)' }}>
-                    Don't have an account? <Link to="/register" style={{ color: 'var(--blue)', fontWeight: 500 }}>Create one</Link>
+                    Don't have an account? <Link to="/register" state={{ from: (location.state as { from?: unknown })?.from }} style={{ color: 'var(--blue)', fontWeight: 500 }}>Create one</Link>
                 </div>
             </div>
         </div>

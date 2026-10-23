@@ -27,6 +27,49 @@ describe('NASA APOD Data Service — Response Parsing & Media Types', () => {
     assert.equal(result.copyright, 'Martin Pugh');
   });
 
+  test('parses rich science.nasa.gov APOD payload with HTML explanation and credit', () => {
+    const mockRaw: RawApodResponse = {
+      title: 'Andromeda in Southern Spring',
+      date: '2026-10-23',
+      media_type: 'image',
+      url: 'https://science.nasa.gov/image-article/apod-2026-october-23-andromeda-in-southern-spring/',
+      hdurl: 'https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/october/APOD_Lucy.jpg?w=3000&h=2004',
+      credit: '<a href="https://www.astrolucyhu.com/about-lucy">Lucy Yunxi Hu</a>',
+      basic_html: '<!doctype html><html><body><IMG SRC="https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/october/APOD_Lucy.jpg" alt="Andromeda"></body></html>',
+      explanation: '<strong>Explanation:</strong> Looking toward the north from Mullion, <a href="https://example.com">Andromeda</a> spans 6 moons.',
+    };
+
+    const result = parseApodResponse(mockRaw);
+
+    assert.equal(result.isFallback, false);
+    assert.equal(result.title, 'Andromeda in Southern Spring');
+    assert.equal(result.date, '2026-10-23');
+    assert.equal(result.mediaType, 'image');
+    assert.equal(result.url, 'https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/october/APOD_Lucy.jpg');
+    assert.equal(result.hdUrl, 'https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/october/APOD_Lucy.jpg?w=3000&h=2004');
+    assert.equal(result.copyright, 'Lucy Yunxi Hu');
+    assert.equal(result.explanation.includes('<strong>'), false);
+    assert.equal(result.explanation.includes('<a href'), false);
+    assert.match(result.explanation, /^Looking toward the north/);
+  });
+
+  test('rejects WordPress theme placeholder logo and returns fallback', () => {
+    const brokenScraperPayload: RawApodResponse = {
+      title: 'NASA Science',
+      date: '2026-10-23',
+      media_type: 'image',
+      url: 'https://science.nasa.gov/wp-content/themes/nasa-child/assets/images/nasa-logo@2x.png',
+      hdurl: 'https://science.nasa.gov/wp-content/themes/nasa-child/assets/images/nasa-logo@2x.png',
+      explanation: 'Some explanation text...',
+    };
+
+    const result = parseApodResponse(brokenScraperPayload);
+
+    assert.equal(result.isFallback, true);
+    assert.equal(result.title, FALLBACK_ASTRONOMY.title);
+    assert.match(result.statusNotice || '', /generic site logo/i);
+  });
+
   test('parses video APOD response correctly and flags mediaType as video', () => {
     const mockRaw: RawApodResponse = {
       title: 'A Total Solar Eclipse over Texas',
@@ -44,6 +87,22 @@ describe('NASA APOD Data Service — Response Parsing & Media Types', () => {
     assert.equal(result.mediaType, 'video');
     assert.equal(result.url, 'https://www.youtube.com/embed/dQw4w9WgXcQ');
     assert.equal(result.hdUrl, undefined);
+  });
+
+  test('extracts video iframe embed from science.nasa.gov basic_html', () => {
+    const mockRaw: RawApodResponse = {
+      title: 'Sonified: Eagle Nebula Pillars',
+      date: '2026-10-18',
+      media_type: 'video',
+      url: 'https://science.nasa.gov/image-article/apod-2026-october-18-sonified-eagle-nebula-pillars/',
+      basic_html: '<iframe width="960" height="540" src="//www.youtube.com/embed/DzrCEm1ZBRY?rel=0" frameborder="0"></iframe>',
+    };
+
+    const result = parseApodResponse(mockRaw);
+
+    assert.equal(result.isFallback, false);
+    assert.equal(result.mediaType, 'video');
+    assert.equal(result.url, 'https://www.youtube.com/embed/DzrCEm1ZBRY?rel=0');
   });
 
   test('returns fallback astronomy entry when raw data has NASA error payload', () => {
@@ -104,7 +163,7 @@ describe('NASA APOD Data Service — Response Parsing & Media Types', () => {
 });
 
 describe('NASA APOD Data Service — Network Resilience & HTTP Status Handling', () => {
-  test('handles custom date parameter in request URL', async () => {
+  test('handles custom date parameter in primary request URL', async () => {
     let capturedUrl = '';
     const mockFetch: typeof fetch = async (input) => {
       capturedUrl = input.toString();
@@ -122,9 +181,39 @@ describe('NASA APOD Data Service — Network Resilience & HTTP Status Handling',
 
     const result = await getFeaturedAstronomy('2024-04-08', mockFetch);
 
-    assert.match(capturedUrl, /date=2024-04-08/);
+    assert.match(capturedUrl, /apod-basic\/240408/);
     assert.equal(result.title, 'Custom Eclipse');
     assert.equal(result.date, '2024-04-08');
+    assert.equal(result.isFallback, false);
+  });
+
+  test('falls back to legacy endpoint when primary endpoint encounters an error', async () => {
+    const calledUrls: string[] = [];
+    const mockFetch: typeof fetch = async (input) => {
+      const urlStr = input.toString();
+      calledUrls.push(urlStr);
+      if (urlStr.includes('science.nasa.gov')) {
+        return new Response('Primary Service Unavailable', { status: 503 });
+      }
+      return new Response(
+        JSON.stringify({
+          title: 'Legacy Fallback Discovery',
+          date: '2024-04-08',
+          explanation: 'Recovered via legacy endpoint',
+          url: 'https://apod.nasa.gov/apod/image/2404/legacy.jpg',
+          media_type: 'image',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    const result = await getFeaturedAstronomy('2024-04-08', mockFetch);
+
+    assert.equal(calledUrls.length, 2);
+    assert.match(calledUrls[0], /science\.nasa\.gov/);
+    assert.match(calledUrls[1], /api\.nasa\.gov\/planetary\/apod/);
+    assert.match(calledUrls[1], /date=2024-04-08/);
+    assert.equal(result.title, 'Legacy Fallback Discovery');
     assert.equal(result.isFallback, false);
   });
 
@@ -141,7 +230,11 @@ describe('NASA APOD Data Service — Network Resilience & HTTP Status Handling',
   });
 
   test('handles HTTP 401 / 403 unauthorized errors with graceful fallback notice', async () => {
-    const mockFetch: typeof fetch = async () => {
+    const mockFetch: typeof fetch = async (input) => {
+      const url = input.toString();
+      if (url.includes('science.nasa.gov')) {
+        return new Response('Not found on primary', { status: 404 });
+      }
       return new Response('API key rejected', { status: 403 });
     };
 

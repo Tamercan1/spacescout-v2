@@ -10,13 +10,14 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { getFeaturedAstronomy } from '@/lib/nasa';
+import { getAppUrl } from '@/lib/config';
 
 export async function FeaturedAstronomySection({ date }: { date?: string } = {}) {
   const item = await getFeaturedAstronomy(date);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5173';
+  const appUrl = getAppUrl();
 
-  // Construct exploration URL for the prompt bridge
-  const exploreUrl = `${appUrl}/explore?query=${encodeURIComponent(
+  // Construct exploration URL for the prompt bridge using documented prompt parameter
+  const exploreUrl = `${appUrl}/explore?prompt=${encodeURIComponent(
     `Tell me about ${item.title} discovered on ${item.date}`
   )}`;
 

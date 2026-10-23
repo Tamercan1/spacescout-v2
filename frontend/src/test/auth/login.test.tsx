@@ -92,5 +92,24 @@ describe('Login Page', () => {
             expect(mockNavigate).toHaveBeenCalledWith('/');
         });
     });
+
+    it('redirects to the intended destination path and query when location.state.from is provided', async () => {
+        mockLoginUser.mockResolvedValueOnce(undefined);
+
+        render(
+            <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: { pathname: '/explore', search: '?prompt=Tell%20me%20about%20APOD' } } }]}>
+                <Login />
+            </MemoryRouter>
+        );
+
+        fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'cosmonaut' } });
+        fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret123' } });
+        fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+        await waitFor(() => {
+            expect(mockLoginUser).toHaveBeenCalledWith('cosmonaut', 'secret123');
+            expect(mockNavigate).toHaveBeenCalledWith('/explore?prompt=Tell%20me%20about%20APOD', { replace: true });
+        });
+    });
 });
 

@@ -32,16 +32,30 @@ export default function Explore() {
     const initialPrompt = navState?.initialPrompt;
     const startFresh = navState?.startFresh;
 
+    // Safely extract, validate, and limit optional incoming query parameter (?prompt=... or ?query=...)
+    const MAX_QUERY_PROMPT_LENGTH = 500;
+    const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+    const queryPrompt = useMemo(() => {
+        const raw = searchParams.get('prompt') || searchParams.get('query');
+        if (!raw) return null;
+        const trimmed = raw.trim();
+        if (!trimmed) return null;
+        return trimmed.slice(0, MAX_QUERY_PROMPT_LENGTH);
+    }, [searchParams]);
+
+    const hasConsumedQueryPromptRef = useRef<boolean>(false);
+    const hasInitialQueryPrompt = Boolean(!id && !startFresh && queryPrompt);
+
     const [plan, setPlan] = useState<SpacePlan | null>(null);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
-    const [isLoading, setIsLoading] = useState(!startFresh);
+    const [isLoading, setIsLoading] = useState(!startFresh && !hasInitialQueryPrompt);
     const [localPrompt, setLocalPrompt] = useState(initialPrompt || "");
     const [error, setError] = useState<string | null>(null);
     const [continueExpanded, setContinueExpanded] = useState(() => {
         return localStorage.getItem('spacescout_keep_continue_open') === 'true';
     });
     const [prompt, setPrompt] = useState("");
-    const [emptyPrompt, setEmptyPrompt] = useState("");
+    const [emptyPrompt, setEmptyPrompt] = useState(hasInitialQueryPrompt && queryPrompt ? queryPrompt : "");
     const [localIsCreatingInteraction, setLocalIsCreatingInteraction] = useState(false);
     const [followUpError, setFollowUpError] = useState<string | null>(null);
 
@@ -179,9 +193,24 @@ export default function Explore() {
         runCreate();
     }, [initialPrompt, navigate, createPlan]);
 
+    // Consume incoming query prompt (from URL parameter) safely without auto-submitting
+    useEffect(() => {
+        if (!queryPrompt || hasConsumedQueryPromptRef.current) return;
+        hasConsumedQueryPromptRef.current = true;
+
+        if (!id) {
+            setEmptyPrompt(queryPrompt);
+            setPlan(null);
+            setIsLoading(false);
+        } else {
+            setPrompt(queryPrompt);
+            setContinueExpanded(true);
+        }
+    }, [queryPrompt, id]);
+
     // Loading existing plan or handling resumption when no prompt is provided
     useEffect(() => {
-        if (initialPrompt || startFresh) return;
+        if (initialPrompt || startFresh || (!id && queryPrompt)) return;
 
         const loadOrResume = async () => {
             // If active creation is in flight, let the mission planner loading UI render

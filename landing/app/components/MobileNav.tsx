@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Menu, X, Rocket, ExternalLink, Telescope, Shield, Layers, Sparkles } from 'lucide-react';
 import { GitHubIcon } from './GitHubIcon';
 
@@ -11,30 +11,72 @@ interface MobileNavProps {
 
 export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  const close = useCallback(() => setIsOpen(false), []);
+  const close = useCallback(() => {
+    setIsOpen(false);
+  }, []);
 
+  const open = useCallback(() => {
+    setIsOpen(true);
+  }, []);
+
+  // Manage focus, Escape key, body scroll locking, and focus trapping
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
+    // Shift focus into the drawer upon opening
+    const timer = setTimeout(() => {
+      closeBtnRef.current?.focus();
+    }, 50);
 
-    document.addEventListener('keydown', handleEscape);
     document.body.style.overflow = 'hidden';
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+
+        const firstElement = focusable[0];
+        const lastElement = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
     return () => {
-      document.removeEventListener('keydown', handleEscape);
+      clearTimeout(timer);
+      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
+      // Restore focus to opener button when drawer closes
+      openerRef.current?.focus();
     };
   }, [isOpen, close]);
 
   return (
     <>
       <button
+        ref={openerRef}
         className="mobile-menu-toggle"
-        onClick={() => setIsOpen(true)}
+        onClick={open}
         aria-label="Open navigation menu"
         aria-expanded={isOpen}
       >
@@ -52,15 +94,18 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
 
       {/* Slide-in panel */}
       <nav
+        ref={panelRef}
         className="mobile-nav-panel"
         data-open={isOpen}
         style={{ display: isOpen ? 'flex' : undefined }}
         aria-label="Mobile navigation"
-        role="navigation"
+        role="dialog"
+        aria-modal="true"
       >
         <div className="mobile-nav-header">
           <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Navigation</span>
           <button
+            ref={closeBtnRef}
             className="mobile-menu-toggle"
             onClick={close}
             aria-label="Close navigation menu"

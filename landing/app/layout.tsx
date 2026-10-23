@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { getSiteUrl } from '@/lib/config';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
+  metadataBase: siteUrl ? new URL(siteUrl) : undefined,
   title: 'SpaceScout — AI-Powered Space Exploration with NASA Data',
   description:
     'Explore the cosmos with natural language. SpaceScout uses AI reasoning and live NASA data to retrieve real astronomical discoveries, track near-Earth objects, and monitor solar activity.',
+  alternates: siteUrl ? { canonical: siteUrl } : undefined,
   icons: {
     icon: [
       { url: '/favicon.ico' },
@@ -19,13 +22,22 @@ export const metadata: Metadata = {
       'Ask questions about space in natural language. SpaceScout coordinates NASA data sources, retrieves real observations, and builds structured discoveries you can follow up on.',
     type: 'website',
     siteName: 'SpaceScout',
-    ...(siteUrl !== 'http://localhost:3000' ? { url: siteUrl } : {}),
+    ...(siteUrl ? { url: siteUrl } : {}),
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'SpaceScout — AI-Powered Space Exploration with NASA Data',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SpaceScout — AI-Powered Space Exploration',
     description:
       'Explore the cosmos with natural language, live NASA data, and AI reasoning.',
+    images: ['/og-image.png'],
   },
   robots: {
     index: true,

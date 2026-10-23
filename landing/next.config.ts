@@ -20,6 +20,14 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'science.nasa.gov',
       },
+      {
+        protocol: 'https',
+        hostname: 'assets.science.nasa.gov',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.science.nasa.gov',
+      },
     ],
   },
 };

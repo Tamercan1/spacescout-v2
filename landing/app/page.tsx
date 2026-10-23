@@ -21,10 +21,11 @@ import {
 import { FeaturedAstronomySection } from './components/FeaturedAstronomy';
 import { MobileNav } from './components/MobileNav';
 import { GitHubIcon } from './components/GitHubIcon';
+import { getAppUrl } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
-const GITHUB_URL = 'https://github.com/Tamercan1/spacescout-v2';
+const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL || 'https://github.com/Tamercan1/spacescout-v2';
 
 interface HomePageProps {
   searchParams?: Promise<{ date?: string }>;
@@ -33,7 +34,7 @@ interface HomePageProps {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const resolvedParams = searchParams ? await searchParams : undefined;
   const requestedDate = resolvedParams?.date;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5173';
+  const appUrl = getAppUrl();
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -404,10 +405,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                       <Lock size={18} />
                     </div>
                     <div>
-                      <div className="byok-feature-title">Encrypted at rest</div>
+                      <div className="byok-feature-title">Encrypted before storage</div>
                       <p className="byok-feature-text">
-                        User API keys are encrypted using Fernet symmetric encryption before storage.
-                        Plaintext keys are never returned in API responses or written to logs.
+                        User provider credentials are encrypted using Fernet symmetric encryption before
+                        being persisted in PostgreSQL. Plaintext keys are never written to application logs.
                       </p>
                     </div>
                   </div>
@@ -417,10 +418,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                       <Eye size={18} />
                     </div>
                     <div>
-                      <div className="byok-feature-title">Masked display</div>
+                      <div className="byok-feature-title">Masked read responses</div>
                       <p className="byok-feature-text">
-                        Credentials are shown as masked hints (e.g. ••••abcd) so you can
-                        identify which key is active without exposing it.
+                        Credential read endpoints expose only masked hints (e.g. ••••abcd) so you can
+                        identify active keys without exposing plaintext to the browser.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="byok-feature">
+                    <div className="byok-feature-icon" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>
+                      <Server size={18} />
+                    </div>
+                    <div>
+                      <div className="byok-feature-title">Server-side execution</div>
+                      <p className="byok-feature-text">
+                        All AI completions and NASA queries execute server-side in Django. Keys are
+                        decrypted only in memory at execution time and are never bundled into client scripts.
                       </p>
                     </div>
                   </div>
@@ -430,10 +444,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                       <KeyRound size={18} />
                     </div>
                     <div>
-                      <div className="byok-feature-title">Validated before saving</div>
+                      <div className="byok-feature-title">Validated before saving &amp; fallback</div>
                       <p className="byok-feature-text">
-                        Keys are validated against the actual provider API before they&apos;re
-                        stored. Invalid or revoked keys are rejected upfront.
+                        Keys are validated against provider APIs upfront. Depending on deployment configuration,
+                        server-side fallback keys may also be available so personal keys remain optional.
                       </p>
                     </div>
                   </div>
@@ -466,7 +480,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     </span>
                   </div>
                   <div style={{ padding: '12px 16px', fontSize: '0.82rem', color: 'var(--text-3)', lineHeight: 1.5 }}>
-                    Your keys → encrypted storage → decrypted only at execution time → never logged or exposed.
+                    Your keys → encrypted PostgreSQL storage → decrypted server-side at execution time → masked in client views.
                   </div>
                 </div>
               </div>
