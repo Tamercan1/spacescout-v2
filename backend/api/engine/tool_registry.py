@@ -91,7 +91,11 @@ tool_registry = {
         "parameters": [
             {
                 "name": "query",
-                "description": "The search keyword or entity to query (e.g. 'James Webb', 'Apollo 11', 'Jupiter').",
+                "description": (
+                    "The search keyword or entity to query. When searching for space imagery or telescope observations, "
+                    "always include a specific celestial target or observation term (e.g. 'James Webb nebula', 'James Webb deep field', 'Jupiter', 'Hubble galaxy') "
+                    "rather than bare hardware or telescope names alone."
+                ),
                 "required": True
             },
             {

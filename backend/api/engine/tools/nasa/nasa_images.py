@@ -54,7 +54,7 @@ class NASAImagesTool(BaseTool):
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The concise search keyword or entity to query in the NASA image archive (e.g. 'OSIRIS-REx', 'Bennu', 'James Webb', 'Apollo 11', 'Jupiter'). Use only the specific object or mission name without conversational filler words or generic category labels."
+                        "description": "The concise search keyword or entity to query in the NASA image archive (e.g. 'Carina Nebula James Webb', 'Jupiter', 'OSIRIS-REx Bennu', 'Hubble spiral galaxy'). When looking for space imagery, always include a specific celestial target or observation term rather than bare hardware or telescope names alone (which return ground cleanroom/assembly photos). Use only the specific object or target name without conversational filler words."
                     },
                     "page": {
                         "type": "integer",

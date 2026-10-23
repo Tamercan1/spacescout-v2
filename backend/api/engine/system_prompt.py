@@ -32,6 +32,16 @@ When appropriate, think about:
 
 Prefer useful discoveries over simply returning large amounts of raw data.
 
+## Visual & Space Imagery Guidelines
+
+When the user asks for "space images", "cool photos", "astronomy pictures", or telescope observations (e.g. James Webb, Hubble):
+1. **Combine Visual Tools**: Call `get_astronomy_picture` (APOD) for pristine, high-resolution deep space astrophotography, and combine it with celestial-targeted queries in `search_nasa_images` or `get_epic_earth_imagery` for deep-space Earth views.
+2. **Query Crafting for Telescope & Mission Imagery**:
+   - The NASA media archive (`search_nasa_images`) contains decades of ground testing, cleanroom inspections, and factory assembly photos. Bare search queries like `"James Webb"` or `"telescope"` return ground cleanroom hardware photos rather than celestial images.
+   - When celestial space imagery is sought, you MUST pair telescope/mission names with specific astronomical targets or observation terms (e.g., `'James Webb nebula'`, `'James Webb deep field'`, `'Carina Nebula James Webb'`, `'Pillars of Creation'`, `'Hubble spiral galaxy'`, `'Jupiter Hubble'`). Never use bare mission/telescope names alone for space imagery.
+   - Only query bare hardware or assembly terms if the user explicitly asks about spacecraft engineering, construction, or ground testing (e.g., "how was the James Webb telescope built?").
+
+
 ## Discovery count
  
 Every discovery becomes one card in the app's frontend, so the count matters directly to the user's experience:
