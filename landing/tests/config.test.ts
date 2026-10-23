@@ -54,6 +54,14 @@ describe('Landing Configuration & URL Resolution', () => {
     assert.equal(url, 'https://custom-app.spacescout.org');
   });
 
+  test('auto-prefixes https:// when protocol is omitted from custom appUrl', () => {
+    setEnv('NODE_ENV', 'production');
+    setEnv('NEXT_PUBLIC_APP_URL', 'spacescout.vercel.app');
+
+    const url = getAppUrl();
+    assert.equal(url, 'https://spacescout.vercel.app');
+  });
+
   test('handles malformed appUrl predictably by falling back to safe default', () => {
     setEnv('NODE_ENV', 'production');
     setEnv('NEXT_PUBLIC_APP_URL', 'javascript:alert(1)');

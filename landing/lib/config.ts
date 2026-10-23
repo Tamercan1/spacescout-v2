@@ -21,7 +21,10 @@ const DEFAULT_PROD_APP_URL = 'https://spacescout.vercel.app';
  */
 export function getAppUrl(): string {
   const isProd = process.env.NODE_ENV === 'production';
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  let raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (raw && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+    raw = `https://${raw}`;
+  }
 
   if (raw && /^https?:\/\/[^\s]+$/i.test(raw)) {
     // Prevent accidental localhost URLs in production mode
@@ -44,7 +47,10 @@ export function getAppUrl(): string {
  */
 export function getSiteUrl(): string | null {
   const isProd = process.env.NODE_ENV === 'production';
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  let raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (raw && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+    raw = `https://${raw}`;
+  }
 
   if (raw && /^https?:\/\/[^\s]+$/i.test(raw)) {
     if (isProd && /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?/i.test(raw)) {
