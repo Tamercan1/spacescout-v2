@@ -283,7 +283,7 @@ Implement the approved V2 design from `design/mockups/explore-professional-refin
 Harden backend and frontend infrastructure for production cloud hosting:
 
 * **Production Cloud Services Deployed**:
-  * **Frontend**: Vercel (`https://spacescout.vercel.app`) with SPA routing rewrites (`vercel.json`) and build-time `VITE_API_URL` validation.
+  * **Frontend**: Vercel (`https://spacescout-app.vercel.app`) with SPA routing rewrites (`vercel.json`) and build-time `VITE_API_URL` validation.
   * **Backend**: Render Web Service (`https://spacescout.onrender.com`) running Gunicorn WSGI (2 workers, 4 threads, 120s timeout) and WhiteNoise static asset compression.
   * **Database**: Aiven PostgreSQL with SSL enforced connection pooling via `dj-database-url` and `psycopg`.
 * **Security & Environment Hardening**:
@@ -369,6 +369,52 @@ Ongoing portfolio tasks:
 
 ---
 
+## Phase 10 — Standalone Landing Application & Discovery Bridge
+
+**Status: Completed Locally**
+
+Delivered a dedicated public marketing and discovery entry point under `landing/`:
+
+* **Next.js 15 SSR Architecture**:
+  * Request-time server rendering with `export const dynamic = 'force-dynamic'`.
+  * Server-side NASA APOD integration with 1-hour ISR revalidation.
+  * Multi-source resilience: Official NASA Science REST API (`science.nasa.gov`) → Legacy API endpoint (`api.nasa.gov`) → Bundled offline fallback (`/carina-nebula.jpg` and `FALLBACK_ASTRONOMY`).
+  * Historical date browser (`?date=YYYY-MM-DD`) with dismissible active filter badge.
+* **APOD-to-Exploration Prompt Bridge**:
+  * Interactive CTA ("Explore in SpaceScout") linking to `${appUrl}/explore?prompt=...`.
+  * Frontend query parameter prefill contract (`?prompt=` and `?query=`) in `Explore.tsx`.
+  * Full query preservation through unauthenticated redirects to `/login` and return to `/explore`.
+* **Mobile Navigation & Accessibility**:
+  * Slide-in mobile navigation drawer with backdrop overlay.
+  * Focus trapping, scroll locking (`overflow: hidden`), and `preventScroll: true` focus restoration to eliminate mobile viewport displacement.
+  * Sticky navbar context preserved across mobile and desktop breakpoints.
+* **Resilient URL Resolution & Hydration**:
+  * Auto-prefixing `https://` on protocol-less URLs in `lib/config.ts`.
+  * `suppressHydrationWarning` on `<html>` and `<body>` to ignore browser extension attribute modifications (e.g. Grammarly).
+
+---
+
+## Phase 11 — Landing Deployment Readiness & Pre-Release Verification
+
+**Status: Completed Locally; Pending Production Deployment**
+
+Audited and verified the `landing/` application for independent Vercel hosting:
+
+* **Vercel Build Isolation**:
+  * Standalone `package.json`, `package-lock.json` (lockfile v3), and `next.config.ts`.
+  * Zero repository imports escaping the `landing/` directory.
+  * Verified independent build settings (`next build`, `.next` output directory).
+* **Metadata & SEO Hygiene**:
+  * Resolved Next.js build-time metadataBase warning by conditioning social images on `siteUrl`.
+  * Guaranteed zero localhost URL leaks in production HTML, canonical tags, or dynamic sitemaps when `NEXT_PUBLIC_SITE_URL` is unset.
+  * Validated 1200×630 Open Graph card asset (`public/og-image.png`).
+* **Deployment Impact Check**:
+  * Audited 9 unpushed local commits for dependencies and impact on existing Vercel frontend and Render backend.
+  * Confirmed zero database migrations and zero required environment variable changes.
+  * Verified full regression test suites: 25/25 landing tests passing, 70/70 frontend tests passing.
+
+---
+
 ## Known Operational Limitations & Future Improvements
 
 ### Operational Limitations
@@ -380,7 +426,7 @@ Ongoing portfolio tasks:
 ### Future Improvements
 * **Streaming Progress (SSE / WebSockets)**: Implement Server-Sent Events or WebSockets for real-time planner telemetry, eliminating long-running synchronous HTTP requests and improving resilience against proxy timeouts.
 * **Asynchronous Task Queue (Celery/Redis)**: Decouple multi-step planner execution into background worker tasks with job status polling or event-driven completion.
-* **Custom Domain Routing**: Attach a branded custom domain with 1-year HSTS preload registration.
+* **Custom Domain Routing**: Attach a branded custom domain with 1-year HSTS preload registration across both the landing site and application.
 
 ---
 
@@ -391,7 +437,7 @@ Do not add these merely because they are technically interesting:
 * generic chatbot functionality
 * unnecessary AI frameworks
 * social features
-* unrelated NASA APIs
+* unrelated NASA APIs (e.g. Mars Rover Photos)
 * complex real-time infrastructure
 * excessive animations
 * unnecessary microservices
@@ -403,5 +449,5 @@ New scope should be evaluated against the core exploration experience.
 
 ## Current Priority
 
-> **SpaceScout V2 Release v2.0.0 is deployed and verified in production across Vercel, Render, and Aiven PostgreSQL. Current priority is post-release monitoring, collecting user feedback, and evaluating future streaming infrastructure improvements.**
+> **Pre-release documentation and verification complete. Next step is pushing the 10 verified local commits to GitHub `main` and creating the new `landing/` project on Vercel.**
 

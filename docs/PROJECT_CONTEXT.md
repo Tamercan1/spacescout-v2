@@ -2,17 +2,27 @@
 
 ## Overview
 
-SpaceScout is an AI-powered space exploration application originally built as a CS50 Web Programming with Python and JavaScript final project.
+SpaceScout is an AI-powered space exploration platform that transforms natural-language inquiries into structured, observable discoveries backed by live NASA data. Rather than acting as a generic conversational chatbot, SpaceScout coordinates real astronomical instruments, archives, and telemetry—synthesizing raw observations into persistent, multi-turn exploration workspaces.
 
-The application allows users to ask questions about space in natural language. An AI planner interprets the request, dynamically coordinates NASA data sources, retrieves observational data through NASA APIs, and returns structured discoveries and contextual synthesis to the user.
-
-SpaceScout V2 is the production-ready evolution of the project. It features an additive multi-turn exploration model, Bring Your Own Key (BYOK) credential encryption, navigation-safe state preservation, borderless error UX, and a responsive modern design system deployed to live cloud infrastructure.
+SpaceScout V2 is the production-ready evolution of the project. It features an additive multi-turn exploration model, Bring Your Own Key (BYOK) credential encryption, navigation-safe state preservation, borderless error UX, a standalone Next.js marketing landing application, and a responsive modern design system deployed to live cloud infrastructure.
 
 ---
 
 ## Current Technology Stack
 
-### Frontend
+### Landing Application (`landing/`)
+
+* Next.js 15 (App Router)
+* React 19
+* TypeScript
+* CSS Custom Properties & responsive vanilla styling
+* Lucide React (icons)
+* Request-time SSR (`force-dynamic`) with 1-hour ISR revalidation for astronomy content
+* Server-side NASA Science REST API client with fallback endpoints
+* Automated testing: Node.js test runner (`node:test`, `node:assert/strict`)
+* Production Hosting: Configured for independent Vercel project deployment (Root Directory: `landing/`)
+
+### Frontend SPA (`frontend/`)
 
 * React 19
 * TypeScript
@@ -21,10 +31,10 @@ SpaceScout V2 is the production-ready evolution of the project. It features an a
 * Axios (with centralized JWT token refresh interceptor)
 * Lucide React (icons)
 * React Markdown
-* Testing: Vitest, React Testing Library, @testing-library/jest-dom, @testing-library/user-event, jsdom
-* Production Hosting: Vercel ([https://spacescout.vercel.app](https://spacescout.vercel.app)) with SPA rewrites (`vercel.json`)
+* Testing: Vitest, React Testing Library, @testing-library/jest-dom, @testing-library/user-event, jsdom (70 automated tests)
+* Production Hosting: Vercel ([https://spacescout-app.vercel.app](https://spacescout-app.vercel.app)) with SPA rewrites (`vercel.json`)
 
-### Backend
+### Backend API (`backend/`)
 
 * Python 3.12
 * Django 6
@@ -38,6 +48,7 @@ SpaceScout V2 is the production-ready evolution of the project. It features an a
 * Production Web Server: Gunicorn (2 workers, 4 threads, 120s timeout) + WhiteNoise for compressed static asset serving
 * Production Hosting: Render Web Service ([https://spacescout.onrender.com](https://spacescout.onrender.com))
 * uv (fast package management and dependency locking)
+* Testing: Django test runner (178 unit & integration tests)
 
 ### External Services
 
@@ -49,20 +60,19 @@ SpaceScout V2 is the production-ready evolution of the project. It features an a
 
 ## Production Deployment & Hosting
 
-SpaceScout V2 is deployed across live cloud services:
+SpaceScout V2 is designed across independent cloud services:
 
-* **Frontend**: Hosted on Vercel at [https://spacescout.vercel.app](https://spacescout.vercel.app).
+* **Landing Website**: Prepared for independent deployment on Vercel at [https://spacescout.vercel.app](https://spacescout.vercel.app) with Root Directory set to `landing/`. Automatically detects Next.js framework preset. Consumes server-side `NASA_API_KEY`, with public URLs configured via `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_SITE_URL`.
+* **Frontend SPA**: Hosted on Vercel at [https://spacescout-app.vercel.app](https://spacescout-app.vercel.app).
   * Build command: `npm run build` (`tsc -b && vite build`).
   * Output directory: `dist`.
   * Single-Page Application (SPA) routing is handled by `frontend/vercel.json` rewrites redirecting all client routes to `/index.html`.
   * Environment configuration: `VITE_API_URL` points to the production Render backend.
-
-* **Backend**: Hosted on Render as a Web Service at [https://spacescout.onrender.com](https://spacescout.onrender.com).
+* **Backend API**: Hosted on Render as a Web Service at [https://spacescout.onrender.com](https://spacescout.onrender.com).
   * WSGI Server: Gunicorn running with 2 worker processes, 4 threads per worker, and a 120-second timeout to accommodate multi-turn LLM and NASA API tool loops.
   * Static Assets: Collected and compressed via WhiteNoise (`CompressedStaticFilesStorage`).
   * Proxy SSL: Render terminates TLS at the edge and forwards HTTP traffic with `HTTP_X_FORWARDED_PROTO = 'https'`. Configured via `SECURE_PROXY_SSL_HEADER`.
   * Health Endpoint: Dedicated unauthenticated health check probe at `/api/health/` (and `/health/`) returning database connectivity status, exempt from SSL redirection (`SECURE_REDIRECT_EXEMPT`).
-
 * **Database**: Hosted on Aiven Cloud PostgreSQL.
   * Connected via `DATABASE_URL` with SSL connection pooling (`sslmode=require`, `conn_max_age=600`, `conn_health_checks=True`).
 
@@ -70,36 +80,54 @@ SpaceScout V2 is deployed across live cloud services:
 
 ## Current Architecture
 
-The current high-level request flow is:
+The platform architecture connects the public landing experience with authenticated exploration workspaces:
 
 ```text
-User
-  ↓
-React + TypeScript (Vite)
-  ↓
-Django REST API (/api/plans/<id>/interactions/)
-  ↓
-Interaction Execution Service
-  ↓
-Generic AI Orchestrator (Multi-Turn Tool Loop)
-  ↓
-LLM Provider (OpenRouter via BaseLLMProvider)
-  ↓
-V2 Tool Registry (BaseTool subclasses)
-  ↓
-NASA Service Layer (APOD, NeoWs, DONKI)
-  ↓
-NASA APIs
-  ↓
-Structured Tool Results
-  ↓
-Post-Tool LLM Enrichment (Contextual 'why_interesting' Analysis)
-  ↓
-Result Persistence Service (Deduplication & Atomicity)
-  ↓
-Database Persistence (SpacePlan, Discovery, DiscoveryMedia, Interaction)
-  ↓
-React UI (InteractionStream & Dynamic Result Cards)
+Public User                                Authenticated User
+    │                                              │
+    ▼                                              ▼
+Next.js 15 Landing App (SSR)              React 19 + TypeScript (Vite SPA)
+    │                                              │
+    ├─ NASA Science APOD API (Server-side)         ├─ In-memory Cache & Request Deduplication
+    │                                              │
+    └─ "Explore in SpaceScout" CTA ───────────────>┴─ Query Parameter Bridge (?prompt=... / ?query=...)
+                                                   │   (Preserved across auth login redirects)
+                                                   ▼
+                                          Django REST Framework API
+                                          (/api/plans/<id>/interactions/)
+                                                   │
+                                                   ▼
+                                          Interaction Execution Service
+                                                   │
+                                                   ▼
+                                          Generic AI Orchestrator (Multi-Turn Tool Loop)
+                                                   │
+                                                   ▼
+                                          LLM Provider (OpenRouter via BaseLLMProvider)
+                                                   │
+                                                   ▼
+                                          Tool Registry (BaseTool subclasses)
+                                                   │
+                                                   ▼
+                                          NASA Service Layer (APOD, NeoWs, DONKI, Images, EPIC)
+                                                   │
+                                                   ▼
+                                          NASA Open APIs
+                                                   │
+                                                   ▼
+                                          Structured Tool Results (Pydantic validated)
+                                                   │
+                                                   ▼
+                                          Post-Tool LLM Enrichment ('why_interesting' Insights)
+                                                   │
+                                                   ▼
+                                          Result Persistence Service (Atomic Deduplication)
+                                                   │
+                                                   ▼
+                                          Database Persistence (SpacePlan, Discovery, Media, Interaction)
+                                                   │
+                                                   ▼
+                                          React UI (InteractionStream & Dynamic Result Cards)
 ```
 
 The backend uses a modular tool registry (`api/engine/tool_registry_v2.py`) mapping registered `BaseTool` instances to descriptions, schemas, and execution handlers with credential injection.
@@ -328,6 +356,8 @@ Exploration creation and follow-up interaction execution are designed for resili
 * **Concurrency & Deduplication Guards**: Concurrent duplicate creation requests return the existing in-flight promise rather than spawning duplicate backend runs. Follow-up interaction submissions are locked per-plan ID while active.
 * **Safe Unmounting & Component Lifecycle**: Ref guards in `Explore.tsx` prevent state corruption and stale state updates when components unmount and remount during in-flight operations.
 * **Stable Error Contracts**: `SpacePlanCreateView` returns HTTP 502 with structured error details and stable error codes (`error_code: "missing_credential"`). Internal exceptions, stack traces, IP addresses, and database credentials are strictly redacted.
+* **Synchronous Ref Cache Synchronization**: `PlansContext` keeps synchronous memory references (`plansRef.current`, `interactionsCacheRef.current`) aligned with React state, guaranteeing that newly created interactions and follow-up discoveries render immediately in the active timeline without requiring a manual page refresh.
+* **APOD-to-Exploration Query Prefill Contract**: `Explore.tsx` reads optional query parameters (`?prompt=` and fallback alias `?query=`) to prefill exploration prompts initiated from the landing page. Unauthenticated users are redirected to `/login` with location state preserved, and are automatically restored to the prefilled exploration view upon signing in.
 * **Atmospheric, Borderless Error UX**: Replaced generic boxed alert cards with an atmospheric, borderless error presentation featuring a soft radial glow icon and contextual action buttons.
 * **Actionable BYOK Guidance**: When an operation fails due to missing or invalid credentials, the error UI routes the user directly to `/settings?tab=credentials`, automatically activating the Credentials tab on both client navigation and direct page reload.
 
@@ -339,7 +369,7 @@ All production security requirements have been addressed and verified:
 
 * **Secret Isolation**: `DJANGO_SECRET_KEY` is strictly required in production via environment variables; the application refuses to start if `DEBUG=False` and no secret key is provided.
 * **Credential Encryption Key**: `CREDENTIAL_ENCRYPTION_KEY` is required in production and validated as a 32-url-safe base64 Fernet key at startup.
-* **Host & Origin Whitelisting**: `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS` are restricted to the production frontend (`https://spacescout.vercel.app`), local development hosts, and explicitly declared environment origins.
+* **Host & Origin Whitelisting**: `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS` are restricted to the production frontend (`https://spacescout-app.vercel.app`), public landing page (`https://spacescout.vercel.app`), local development hosts, and explicitly declared environment origins.
 * **Secure Cookies & Transport**: `SESSION_COOKIE_SECURE = True` and `CSRF_COOKIE_SECURE = True` ensure session and CSRF tokens are only transmitted over HTTPS.
 * **Browser Security Headers**: `X_FRAME_OPTIONS = 'DENY'` (clickjacking prevention) and `SECURE_CONTENT_TYPE_NOSNIFF = True` (MIME-type sniffing defense) are active.
 * **Reverse Proxy TLS Handling**: `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` correctly handles Render edge proxy TLS termination.

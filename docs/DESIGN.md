@@ -11,6 +11,7 @@ Key implemented components:
 * `explore/InteractionStream` — Additive, multi-turn exploration feed
 * Specialized Result Cards (`ApodResultCard`, `NeowsResultCard`, `DonkiResultCard`, `NasaImagesResultCard`, `EpicResultCard`, `GeneralResultCard`)
 * Dark and light theme toggle with CSS custom properties, instant 0ms local caching, and debounced profile synchronization
+* Standalone Next.js 15 landing website (`landing/app/`) — Responsive marketing presentation with featured APOD card, responsive mobile navigation panel, and matching glassmorphic dark design tokens
 
 ---
 

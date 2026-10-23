@@ -27,7 +27,7 @@ describe('Landing Configuration & URL Resolution', () => {
     setEnv('NEXT_PUBLIC_APP_URL', undefined);
 
     const url = getAppUrl();
-    assert.equal(url, 'https://spacescout.vercel.app');
+    assert.equal(url, 'https://spacescout-app.vercel.app');
   });
 
   test('resolves appUrl to localhost default in development when unset', () => {
@@ -43,7 +43,7 @@ describe('Landing Configuration & URL Resolution', () => {
     setEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:5173/');
 
     const url = getAppUrl();
-    assert.equal(url, 'https://spacescout.vercel.app');
+    assert.equal(url, 'https://spacescout-app.vercel.app');
   });
 
   test('accepts valid custom appUrl and removes trailing slash', () => {
@@ -56,10 +56,10 @@ describe('Landing Configuration & URL Resolution', () => {
 
   test('auto-prefixes https:// when protocol is omitted from custom appUrl', () => {
     setEnv('NODE_ENV', 'production');
-    setEnv('NEXT_PUBLIC_APP_URL', 'spacescout.vercel.app');
+    setEnv('NEXT_PUBLIC_APP_URL', 'spacescout-app.vercel.app');
 
     const url = getAppUrl();
-    assert.equal(url, 'https://spacescout.vercel.app');
+    assert.equal(url, 'https://spacescout-app.vercel.app');
   });
 
   test('handles malformed appUrl predictably by falling back to safe default', () => {
@@ -67,7 +67,7 @@ describe('Landing Configuration & URL Resolution', () => {
     setEnv('NEXT_PUBLIC_APP_URL', 'javascript:alert(1)');
 
     const url = getAppUrl();
-    assert.equal(url, 'https://spacescout.vercel.app');
+    assert.equal(url, 'https://spacescout-app.vercel.app');
   });
 
   test('returns null for siteUrl in production when unset without inventing a domain', () => {

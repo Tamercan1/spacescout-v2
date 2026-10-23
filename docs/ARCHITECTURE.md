@@ -20,55 +20,83 @@ Prefer incremental architectural improvements that solve real V2 requirements.
 ## High-Level Architecture
 
 ```text
-React + TypeScript (Vite)
-        │
-        │ REST / JWT
-        ▼
-Django REST Framework
-        │
-        ├── Authentication
-        ├── Exploration API
-        └── Persistence
-                │
-                ▼
-        Space Planner / Domain Logic
-                │
-                ├── LLM Provider
-                │
-                └── Tool Registry
-                       │
-              ┌────────┼────────┐
-              ▼        ▼        ▼
-            NASA     NASA     NASA
-           Service  Service  Service
-              │        │        │
-              └────────┼────────┘
-                       ▼
-                   NASA APIs
+Public Visitors                          Authenticated Users
+       │                                          │
+       ▼                                          ▼
+Next.js 15 Landing App (SSR)             React 19 + TypeScript (Vite SPA)
+       │                                          │
+       ├─ Server-side NASA APOD                   ├─ Shared Contexts (Plans, Auth, Credentials)
+       │                                          │
+       └─ "Explore in SpaceScout" CTA ───────────>┴─ Query Parameter Bridge (?prompt=... / ?query=...)
+                                                  │
+                                                  ▼ REST / JWT
+                                         Django REST Framework (Render)
+                                                  │
+                                                  ├── Authentication & Onboarding
+                                                  ├── Exploration & Interaction APIs
+                                                  ├── Fernet BYOK Credential Persistence
+                                                  │
+                                                  ▼
+                                         Generic AI Orchestrator (Multi-Turn Tool Loop)
+                                                  │
+                                                  ├── OpenRouter Provider (BaseLLMProvider)
+                                                  │
+                                                  └── Tool Registry (BaseTool subclasses)
+                                                         │
+                                        ┌────────────────┼────────────────┐
+                                        ▼                ▼                ▼
+                                      NASA             NASA             NASA
+                                     Service          Service          Service
+                                 (APOD, NeoWs,    (NASA Images)         (EPIC)
+                                    DONKI)               │                │
+                                        │                │                │
+                                        └────────────────┼────────────────┘
+                                                         ▼
+                                                     NASA APIs
+                                                         │
+                                                         ▼
+                                            Aiven PostgreSQL Database
+                                    (Encrypted Credentials, Plans, Discoveries)
 ```
 
-The exact module structure may evolve, but responsibilities should remain clearly separated.
+The monorepo separates public discovery, authenticated exploration, and domain orchestration into distinct layers.
 
 ---
 
-## Frontend
+## Standalone Landing Application (`landing/`)
 
-The frontend uses React + TypeScript with Vite.
+The marketing and public discovery site is implemented as an independent Next.js 15 application under `landing/`.
+
+Key architectural characteristics:
+* **Server-Side Rendering (SSR)**: Uses `export const dynamic = 'force-dynamic'` for request-time rendering of today's astronomy discovery and historical date selection (`?date=YYYY-MM-DD`).
+* **Server-Side NASA APOD Integration**: `landing/lib/nasa.ts` fetches data server-side using Next.js data caching with 1-hour ISR revalidation (`revalidate: 3600`). It features a dual-source resilience strategy:
+  1. Primary: Official NASA Science REST API (`https://science.nasa.gov/wp-json/wp/v2/apod-basic`) for high-resolution images, clean HTML explanations, and author credits.
+  2. Secondary: Legacy API endpoint (`https://api.nasa.gov/planetary/apod`) using the server-only `NASA_API_KEY`.
+  3. Curated Fallback: Bundled offline fallback (`/carina-nebula.jpg` and `FALLBACK_ASTRONOMY`) if upstream rate limits (HTTP 429), timeouts, or network errors occur.
+* **Prompt Parameter Bridge**: The "Explore in SpaceScout" CTA links directly to the authenticated React SPA:
+  `${appUrl}/explore?prompt=${encodeURIComponent('Tell me about ' + item.title + ' discovered on ' + item.date)}`
+* **Isolated Deployment**: Deploys as an independent Vercel project with Root Directory `landing/`. Does not import or depend on repository files outside `landing/`.
+* **Zero Localhost Leaks**: Dynamic sitemap (`sitemap.ts`) and Open Graph social cards (`layout.tsx`) conditionally emit URLs only when `NEXT_PUBLIC_SITE_URL` is set, completely suppressing fallback localhost links in production.
+
+---
+
+## Frontend SPA (`frontend/`)
+
+The core exploration experience uses React 19 + TypeScript with Vite.
 
 Responsibilities include:
-
-* rendering application pages
-* handling user interaction
+* rendering exploration workspaces, additive timeline streams, and discovery cards
+* handling user interaction and multi-turn follow-up prompts
 * managing UI state and shared contexts (`PlansContext`, `AuthContext`, `CredentialsContext`)
-* in-memory caching and deduplication of in-flight requests
-* debounced preference persistence (e.g., local-first theme caching with serialized backend sync)
+* in-memory caching and request deduplication via synchronous ref synchronization (`plansRef.current`, `interactionsCacheRef.current`)
+* consuming incoming exploration prompts from `?prompt=` or `?query=` URL parameters without auto-submitting
+* preserving destination URLs across unauthenticated login redirects (`ProtectedRoutes.tsx` and `Login.tsx`)
+* debounced preference persistence (local-first theme caching with serialized backend sync)
 * authentication token management and automatic refresh queueing via Axios interceptors
-* calling backend APIs
 * presenting explorations and discoveries
-* handling loading, error, and empty states
-* automated component and integration testing via Vitest + React Testing Library
+* automated component and integration testing via Vitest + React Testing Library (70 passing tests)
 
-The frontend should not contain provider credentials or directly call protected NASA/LLM services.
+The frontend does not contain provider secrets or directly execute protected AI/NASA operations.
 
 Major business decisions should remain on the backend.
 

@@ -6,13 +6,13 @@
  */
 
 const DEFAULT_DEV_APP_URL = 'http://localhost:5173';
-const DEFAULT_PROD_APP_URL = 'https://spacescout.vercel.app';
+const DEFAULT_PROD_APP_URL = 'https://spacescout-app.vercel.app';
 
 /**
  * Returns the resolved SpaceScout exploration application URL.
  *
  * Fallback behavior:
- * - Production: defaults to deployed app 'https://spacescout.vercel.app'
+ * - Production: defaults to deployed app 'https://spacescout-app.vercel.app'
  * - Development: defaults to local Vite dev server 'http://localhost:5173'
  *
  * Validation:

@@ -205,18 +205,23 @@ The BYOK architecture is implemented in `backend/api/services/credentials.py`: u
 
 ## Application Structure
 
-SpaceScout V2 has evolved beyond a single Planner-centered interface into a full multi-page application:
+SpaceScout V2 is organized into a public entry point and authenticated exploration workspaces:
 
 ```text
-Home
-Explore
-Explorations
-Settings
+Landing (Public Marketing & Discovery Bridge)
+Home (Authenticated Launchpad)
+Explore (Active Multi-Turn Workspace)
+Explorations (Library & History)
+Settings (Preferences & BYOK Credentials)
 ```
+
+### Landing
+
+The public entry point for visitors. Highlights daily NASA Astronomy Pictures of the Day (APOD) via server-side rendering, product capabilities, security practices, and offers a prompt bridge into the main application.
 
 ### Home
 
-The starting point for users and a place to encourage exploration with suggestion chips and quick-start prompts.
+The starting point for authenticated users and a place to encourage exploration with suggestion chips and quick-start prompts.
 
 ### Explore
 
