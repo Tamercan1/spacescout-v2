@@ -37,7 +37,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const appUrl = getAppUrl();
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', width: '100%' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', width: '100%' }}>
       {/* ================================================================
           Navigation
           ================================================================ */}
