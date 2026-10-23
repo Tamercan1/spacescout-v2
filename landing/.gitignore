@@ -1,0 +1,27 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Next.js Build Outputs
+/.next/
+/out/
+/build
+
+# Debug & Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment Local Overrides
+.env
+.env.*
+!.env.example
+.env*.local
+
+# System & Editor Files
+.DS_Store
+*.pem
+*.tsbuildinfo
+next-env.d.ts
