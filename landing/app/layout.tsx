@@ -22,22 +22,26 @@ export const metadata: Metadata = {
       'Ask questions about space in natural language. SpaceScout coordinates NASA data sources, retrieves real observations, and builds structured discoveries you can follow up on.',
     type: 'website',
     siteName: 'SpaceScout',
-    ...(siteUrl ? { url: siteUrl } : {}),
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'SpaceScout — AI-Powered Space Exploration with NASA Data',
-      },
-    ],
+    ...(siteUrl
+      ? {
+          url: siteUrl,
+          images: [
+            {
+              url: '/og-image.png',
+              width: 1200,
+              height: 630,
+              alt: 'SpaceScout — AI-Powered Space Exploration with NASA Data',
+            },
+          ],
+        }
+      : {}),
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SpaceScout — AI-Powered Space Exploration',
     description:
       'Explore the cosmos with natural language, live NASA data, and AI reasoning.',
-    images: ['/og-image.png'],
+    ...(siteUrl ? { images: ['/og-image.png'] } : {}),
   },
   robots: {
     index: true,
