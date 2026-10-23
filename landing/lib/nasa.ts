@@ -213,7 +213,7 @@ export async function getFeaturedAstronomy(
   try {
     const primaryRes = await fetchFn(primaryUrl, {
       next: { revalidate: 3600 },
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(4500),
     });
 
     if (primaryRes.ok) {
@@ -246,7 +246,7 @@ export async function getFeaturedAstronomy(
   try {
     const legacyRes = await fetchFn(legacyEndpoint.toString(), {
       next: { revalidate: 3600 },
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(4500),
     });
 
     if (!legacyRes.ok) {

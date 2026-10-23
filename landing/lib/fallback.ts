@@ -13,7 +13,7 @@ export const FALLBACK_ASTRONOMY: FeaturedAstronomy = {
   explanation:
     'This landscape of "mountains" and "valleys" speckled with glittering stars is actually the edge of a nearby, young, star-forming region called NGC 3324 in the Carina Nebula. Captured in infrared light by NASA\'s James Webb Space Telescope, this image reveals for the first time previously invisible areas of star birth.',
   mediaType: 'image',
-  url: 'https://images-assets.nasa.gov/image/PIA25327/PIA25327~large.jpg',
+  url: '/carina-nebula.jpg',
   hdUrl: 'https://images-assets.nasa.gov/image/PIA25327/PIA25327~orig.jpg',
   copyright: 'NASA, ESA, CSA, STScI',
   isFallback: true,

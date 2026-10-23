@@ -612,7 +612,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               />
               <p className="footer-brand-text">
                 AI-powered space exploration using NASA&apos;s open data.
-                Built as a CS50 Web Programming final project.
               </p>
             </div>
 
@@ -728,7 +727,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </span>
             </div>
             <div className="footer-bottom-text">
-              SpaceScout V2 © {new Date().getFullYear()} — CS50 Web Programming Final Project
+              SpaceScout V2 © {new Date().getFullYear()}
             </div>
           </div>
         </div>

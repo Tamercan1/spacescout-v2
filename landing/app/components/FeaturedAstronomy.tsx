@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { AstronomyImage } from './AstronomyImage';
 import {
   Calendar,
   Sparkles,
@@ -104,14 +105,9 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
             <div className="astronomy-media-col">
               <div className="astronomy-media-wrap">
                 {item.mediaType === 'image' ? (
-                  <Image
+                  <AstronomyImage
                     src={item.url}
                     alt={item.title}
-                    width={900}
-                    height={600}
-                    priority
-                    unoptimized
-                    className="astronomy-img"
                   />
                 ) : item.mediaType === 'video' ? (
                   item.url.includes('youtube.com') ||
