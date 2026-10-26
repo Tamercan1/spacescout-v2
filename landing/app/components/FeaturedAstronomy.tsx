@@ -25,7 +25,7 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
   )}`;
 
   return (
-    <section id="featured-astronomy" className="section" style={{ paddingTop: '20px' }}>
+    <section id="featured-astronomy" className="section" style={{ paddingTop: '20px', paddingBottom: '36px' }}>
       <div className="container">
         {/* Section Header */}
         <div
@@ -157,7 +157,16 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
 
               {/* Media Footer Attribution */}
               <div className="astronomy-media-footer">
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span
+                  className="astronomy-media-attribution"
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    minWidth: 0,
+                    flex: '1 1 auto',
+                  }}
+                >
                   {item.copyright
                     ? `Credit & Copyright: ${item.copyright}`
                     : 'Image Credit: NASA / Science Operations'}
@@ -168,7 +177,7 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-outline"
-                    style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                    style={{ padding: '4px 10px', fontSize: '0.78rem', flexShrink: 0 }}
                   >
                     <Eye size={12} />
                     Full HD
@@ -210,6 +219,7 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
                     lineHeight: 1.3,
                     color: 'var(--text-1)',
                     marginBottom: '18px',
+                    overflowWrap: 'break-word',
                   }}
                 >
                   {item.title}
@@ -221,6 +231,7 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
                     fontSize: '0.96rem',
                     lineHeight: 1.7,
                     marginBottom: '24px',
+                    overflowWrap: 'break-word',
                   }}
                 >
                   {item.explanation}
@@ -229,6 +240,7 @@ export async function FeaturedAstronomySection({ date }: { date?: string } = {})
 
               {/* Exploration Prompt Bridge */}
               <div
+                className="astronomy-prompt-bridge"
                 style={{
                   borderTop: '1px solid var(--border)',
                   paddingTop: '20px',

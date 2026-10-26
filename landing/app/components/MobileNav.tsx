@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Menu, X, Rocket, ExternalLink, Telescope, Shield, Layers, Sparkles } from 'lucide-react';
 import { GitHubIcon } from './GitHubIcon';
 
@@ -11,9 +12,14 @@ interface MobileNavProps {
 
 export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const close = useCallback(() => {
     setIsOpen(false);
@@ -27,20 +33,13 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
   useEffect(() => {
     if (!isOpen) return;
 
-    // Ensure no horizontal scroll displacement occurred
-    if (typeof window !== 'undefined' && window.scrollX !== 0) {
-      window.scrollTo({ left: 0, top: window.scrollY });
-    }
-
     // Shift focus into the drawer upon opening without scrolling viewport
     const timer = setTimeout(() => {
       closeBtnRef.current?.focus({ preventScroll: true });
     }, 50);
 
     const prevBodyOverflow = document.body.style.overflow;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -74,24 +73,13 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
       clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = prevBodyOverflow;
-      document.documentElement.style.overflow = prevHtmlOverflow;
       // Restore focus to opener button when drawer closes without viewport jump
       openerRef.current?.focus({ preventScroll: true });
     };
   }, [isOpen, close]);
 
-  return (
+  const drawerContent = (
     <>
-      <button
-        ref={openerRef}
-        className="mobile-menu-toggle"
-        onClick={open}
-        aria-label="Open navigation menu"
-        aria-expanded={isOpen}
-      >
-        <Menu size={22} />
-      </button>
-
       {/* Overlay */}
       <div
         className="mobile-nav-overlay"
@@ -167,6 +155,24 @@ export function MobileNav({ appUrl, githubUrl }: MobileNavProps) {
           </a>
         </div>
       </nav>
+    </>
+  );
+
+  return (
+    <>
+      <button
+        ref={openerRef}
+        className="mobile-menu-toggle"
+        onClick={open}
+        aria-label="Open navigation menu"
+        aria-expanded={isOpen}
+      >
+        <Menu size={22} />
+      </button>
+
+      {mounted && typeof document !== 'undefined'
+        ? createPortal(drawerContent, document.body)
+        : null}
     </>
   );
 }

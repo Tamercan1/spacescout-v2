@@ -17,6 +17,8 @@ import {
   Code2,
   Database,
   Cpu,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { FeaturedAstronomySection } from './components/FeaturedAstronomy';
 import { MobileNav } from './components/MobileNav';
@@ -26,6 +28,27 @@ import { getAppUrl } from '@/lib/config';
 export const dynamic = 'force-dynamic';
 
 const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL || 'https://github.com/Tamercan1/spacescout-v2';
+
+const HERO_SAMPLE_PROMPTS = [
+  {
+    icon: Orbit,
+    label: 'Asteroids approaching Earth this week',
+    color: 'var(--amber)',
+    prompt: 'What asteroids are approaching Earth this week?',
+  },
+  {
+    icon: Telescope,
+    label: 'Deep space infrared captures from James Webb',
+    color: 'var(--blue)',
+    prompt: 'Show me deep space infrared captures of the Carina Nebula from James Webb',
+  },
+  {
+    icon: Sun,
+    label: 'Recent solar storm events from DONKI',
+    color: 'var(--purple)',
+    prompt: 'Tell me about recent strong solar flares and active regions reported by DONKI',
+  },
+];
 
 interface HomePageProps {
   searchParams?: Promise<{ date?: string }>;
@@ -103,29 +126,34 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             Hero
             ================================================================ */}
         <section className="hero">
+          {/* Ambient Cosmic Radial Glows */}
+          <div className="hero-glow-layer" aria-hidden="true">
+            <div className="hero-glow-orb hero-glow-primary" />
+            <div className="hero-glow-orb hero-glow-secondary" />
+          </div>
+
           <div className="container">
             <div className="hero-inner">
-              <div className="hero-eyebrow">
-                <span className="badge badge-blue">
-                  <Telescope size={13} />
-                  AI-Powered Space Exploration
-                </span>
-              </div>
 
+              {/* Title with Cosmic Gradient */}
               <h1 className="hero-title">
-                Explore the cosmos with NASA data and AI reasoning
+                Explore the cosmos with{' '}
+                <span className="hero-title-gradient">NASA data</span>{' '}
+                and AI reasoning
               </h1>
 
+              {/* Description */}
               <p className="hero-description">
                 Ask questions in natural language. SpaceScout coordinates NASA data sources,
-                retrieves real observations, and builds structured discoveries you can
+                retrieves real astronomical observations, and builds structured discoveries you can
                 follow up on, compare, and revisit.
               </p>
 
+              {/* Action Buttons */}
               <div className="hero-actions">
                 <a
                   href={appUrl}
-                  className="btn btn-primary btn-lg"
+                  className="btn btn-primary btn-lg hero-btn-launch"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -135,13 +163,65 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 </a>
                 <a
                   href={GITHUB_URL}
-                  className="btn btn-secondary btn-lg"
+                  className="btn btn-secondary btn-lg hero-btn-github"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <GitHubIcon size={18} />
-                  View on GitHub
+                  <span>View on GitHub</span>
+                  <span className="hero-github-badge">v2.0</span>
                 </a>
+              </div>
+
+              <div className="hero-subtext">
+                Free &amp; open-source · Instant natural-language planning · Zero setup required
+              </div>
+
+              {/* Interactive Sample Prompts ("Try asking SpaceScout") */}
+              <div className="hero-prompts-container">
+                <div className="hero-prompts-label">
+                  <Sparkles size={13} style={{ color: 'var(--blue)' }} />
+                  <span>Try asking SpaceScout</span>
+                </div>
+                <div className="hero-prompts-grid">
+                  {HERO_SAMPLE_PROMPTS.map((item) => (
+                    <a
+                      key={item.label}
+                      href={`${appUrl}/explore?prompt=${encodeURIComponent(item.prompt)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hero-prompt-chip"
+                      title={`Launch query: "${item.prompt}"`}
+                    >
+                      <item.icon size={14} style={{ color: item.color, flexShrink: 0 }} />
+                      <span className="hero-prompt-text">{item.label}</span>
+                      <ArrowRight size={12} className="hero-prompt-arrow" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+              {/* Capability Badges Strip */}
+              <div className="hero-metrics-strip">
+                <div className="hero-metric-item">
+                  <span className="hero-metric-val">5 NASA APIs</span>
+                  <span className="hero-metric-lbl">Unified in One Feed</span>
+                </div>
+                <div className="hero-metric-divider" />
+                <div className="hero-metric-item">
+                  <span className="hero-metric-val">Multi-Turn</span>
+                  <span className="hero-metric-lbl">Autonomous Planning</span>
+                </div>
+                <div className="hero-metric-divider" />
+                <div className="hero-metric-item">
+                  <span className="hero-metric-val">BYOK Ready</span>
+                  <span className="hero-metric-lbl">Fernet AES-128 Encryption</span>
+                </div>
+                <div className="hero-metric-divider" />
+                <div className="hero-metric-item">
+                  <span className="hero-metric-val">Zero Plaintext</span>
+                  <span className="hero-metric-lbl">Decrypted in RAM Only</span>
+                </div>
               </div>
             </div>
           </div>
@@ -151,6 +231,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             Featured Astronomy (NASA APOD – Server Component)
             ================================================================ */}
         <FeaturedAstronomySection date={requestedDate} />
+
+        <div className="section-divider" />
 
         {/* ================================================================
             Product Experience
@@ -384,72 +466,70 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             ================================================================ */}
         <section id="security" className="section">
           <div className="container">
+            <div className="product-header">
+              <div className="section-overline">
+                <ShieldCheck size={14} />
+                Security &amp; Credentials
+              </div>
+              <h2 className="section-title">Bring your own API keys</h2>
+              <p className="section-description">
+                SpaceScout supports Bring Your Own Key for OpenRouter and NASA.
+                You can optionally provide your own credentials for higher rate limits
+                and model access, or use the shared application defaults.
+              </p>
+            </div>
+
             <div className="byok-grid">
-              <div className="byok-content">
-                <div>
-                  <div className="section-overline">
-                    <ShieldCheck size={14} />
-                    Security &amp; Credentials
+              <div className="byok-features-list">
+                <div className="byok-feature">
+                  <div className="byok-feature-icon" style={{ background: 'var(--green-dim)', color: 'var(--green)' }}>
+                    <Lock size={18} />
                   </div>
-                  <h2 className="section-title">Bring your own API keys</h2>
-                  <p className="section-description">
-                    SpaceScout supports Bring Your Own Key for OpenRouter and NASA.
-                    You can optionally provide your own credentials for higher rate limits
-                    and model access, or use the shared application defaults.
-                  </p>
+                  <div>
+                    <div className="byok-feature-title">Encrypted before storage</div>
+                    <p className="byok-feature-text">
+                      User provider credentials are encrypted using Fernet symmetric encryption before
+                      being persisted in PostgreSQL. Plaintext keys are never written to application logs.
+                    </p>
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="byok-feature">
-                    <div className="byok-feature-icon" style={{ background: 'var(--green-dim)', color: 'var(--green)' }}>
-                      <Lock size={18} />
-                    </div>
-                    <div>
-                      <div className="byok-feature-title">Encrypted before storage</div>
-                      <p className="byok-feature-text">
-                        User provider credentials are encrypted using Fernet symmetric encryption before
-                        being persisted in PostgreSQL. Plaintext keys are never written to application logs.
-                      </p>
-                    </div>
+                <div className="byok-feature">
+                  <div className="byok-feature-icon" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
+                    <Eye size={18} />
                   </div>
-
-                  <div className="byok-feature">
-                    <div className="byok-feature-icon" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
-                      <Eye size={18} />
-                    </div>
-                    <div>
-                      <div className="byok-feature-title">Masked read responses</div>
-                      <p className="byok-feature-text">
-                        Credential read endpoints expose only masked hints (e.g. ••••abcd) so you can
-                        identify active keys without exposing plaintext to the browser.
-                      </p>
-                    </div>
+                  <div>
+                    <div className="byok-feature-title">Masked read responses</div>
+                    <p className="byok-feature-text">
+                      Credential read endpoints expose only masked hints (e.g. ••••abcd) so you can
+                      identify active keys without exposing plaintext to the browser.
+                    </p>
                   </div>
+                </div>
 
-                  <div className="byok-feature">
-                    <div className="byok-feature-icon" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>
-                      <Server size={18} />
-                    </div>
-                    <div>
-                      <div className="byok-feature-title">Server-side execution</div>
-                      <p className="byok-feature-text">
-                        All AI completions and NASA queries execute server-side in Django. Keys are
-                        decrypted only in memory at execution time and are never bundled into client scripts.
-                      </p>
-                    </div>
+                <div className="byok-feature">
+                  <div className="byok-feature-icon" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>
+                    <Server size={18} />
                   </div>
+                  <div>
+                    <div className="byok-feature-title">Server-side execution</div>
+                    <p className="byok-feature-text">
+                      All AI completions and NASA queries execute server-side in Django. Keys are
+                      decrypted only in memory at execution time and are never bundled into client scripts.
+                    </p>
+                  </div>
+                </div>
 
-                  <div className="byok-feature">
-                    <div className="byok-feature-icon" style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}>
-                      <KeyRound size={18} />
-                    </div>
-                    <div>
-                      <div className="byok-feature-title">Validated before saving &amp; fallback</div>
-                      <p className="byok-feature-text">
-                        Keys are validated against provider APIs upfront. Depending on deployment configuration,
-                        server-side fallback keys may also be available so personal keys remain optional.
-                      </p>
-                    </div>
+                <div className="byok-feature">
+                  <div className="byok-feature-icon" style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}>
+                    <KeyRound size={18} />
+                  </div>
+                  <div>
+                    <div className="byok-feature-title">Validated before saving &amp; fallback</div>
+                    <p className="byok-feature-text">
+                      Keys are validated against provider APIs upfront. Depending on deployment configuration,
+                      server-side fallback keys may also be available so personal keys remain optional.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -457,8 +537,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {/* BYOK Visual */}
               <div className="byok-visual">
                 <div className="byok-visual-header">
-                  <KeyRound size={16} />
-                  API Credentials
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <KeyRound size={16} />
+                    <span>API Credentials</span>
+                  </div>
+                  <span className="badge badge-blue" style={{ fontSize: '0.72rem', padding: '2px 8px' }}>
+                    <ShieldCheck size={11} />
+                    Fernet AES-128
+                  </span>
                 </div>
                 <div className="byok-visual-body">
                   <div className="byok-credential-row">
@@ -479,8 +565,49 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                       Validated
                     </span>
                   </div>
-                  <div style={{ padding: '12px 16px', fontSize: '0.82rem', color: 'var(--text-3)', lineHeight: 1.5 }}>
-                    Your keys → encrypted PostgreSQL storage → decrypted server-side at execution time → masked in client views.
+
+                  {/* Security Pipeline */}
+                  <div className="byok-pipeline">
+                    <div className="byok-pipeline-title">
+                      Security Guarantee &amp; Execution Pipeline
+                    </div>
+                    <div className="byok-pipeline-steps">
+                      <div className="byok-pipeline-step">
+                        <div className="byok-step-badge">1</div>
+                        <div>
+                          <div className="byok-step-name">Client View</div>
+                          <div className="byok-step-desc">Masked hints only</div>
+                        </div>
+                      </div>
+                      <div className="byok-pipeline-arrow">→</div>
+                      <div className="byok-pipeline-step">
+                        <div className="byok-step-badge">2</div>
+                        <div>
+                          <div className="byok-step-name">Django RAM</div>
+                          <div className="byok-step-desc">Decrypted in memory</div>
+                        </div>
+                      </div>
+                      <div className="byok-pipeline-arrow">→</div>
+                      <div className="byok-pipeline-step">
+                        <div className="byok-step-badge">3</div>
+                        <div>
+                          <div className="byok-step-name">PostgreSQL</div>
+                          <div className="byok-step-desc">Encrypted ciphertext</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="byok-trust-footer">
+                    <div className="byok-trust-pill">
+                      <Lock size={12} /> Zero plaintext logs
+                    </div>
+                    <div className="byok-trust-pill">
+                      <Server size={12} /> Server-side execution
+                    </div>
+                    <div className="byok-trust-pill">
+                      <ShieldCheck size={12} /> Never bundled in client
+                    </div>
                   </div>
                 </div>
               </div>

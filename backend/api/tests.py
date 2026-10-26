@@ -254,10 +254,12 @@ class SpacePlanTests(TestCase):
         self.assertEqual(nasa_disc.external_id, "PIA25000")
 
     @patch("api.engine.space_planner.call_llm_with_fallback")
-    def test_run_space_planner_uses_user_preferred_model(self, mock_llm_call):
+    @patch("api.services.credentials.get_provider_key")
+    def test_run_space_planner_uses_user_preferred_model(self, mock_get_key, mock_llm_call):
         from api.engine.space_planner import run_space_planner
         self.user1.profile.preferred_model = "anthropic/claude-3.5-sonnet"
         self.user1.profile.save()
+        mock_get_key.return_value = "sk-or-v1-test-key"
 
         # Mock LLM return message
         mock_message = MagicMock()

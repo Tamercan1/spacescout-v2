@@ -270,7 +270,7 @@ img {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  z-index: 100;
+  z-index: 1000;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -293,7 +293,7 @@ img {
   height: 100dvh;
   background: var(--surface);
   border-left: 1px solid var(--border);
-  z-index: 101;
+  z-index: 1001;
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
@@ -482,13 +482,50 @@ img {
    ============================================================================== */
 
 .hero {
-  padding-top: 72px;
-  padding-bottom: 0;
+  padding-top: 84px;
+  padding-bottom: 40px;
   position: relative;
+  overflow: hidden;
+}
+
+.hero-glow-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.hero-glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hero-glow-primary {
+  top: -80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 820px;
+  height: 440px;
+  background: radial-gradient(ellipse 65% 55% at 50% 40%, rgba(59, 130, 246, 0.22), transparent 70%);
+  filter: blur(50px);
+}
+
+.hero-glow-secondary {
+  top: 60px;
+  left: 50%;
+  transform: translateX(-35%);
+  width: 550px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.12), transparent 65%);
+  filter: blur(55px);
 }
 
 .hero-inner {
-  max-width: 760px;
+  position: relative;
+  z-index: 1;
+  max-width: 860px;
   margin: 0 auto;
   text-align: center;
 }
@@ -496,25 +533,94 @@ img {
 .hero-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   margin-bottom: 24px;
 }
 
+.hero-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 10px;
+  background: rgba(15, 20, 31, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  color: var(--text-2);
+  transition: all var(--ease);
+  text-decoration: none;
+}
+
+.hero-badge-pill:hover {
+  border-color: var(--blue);
+  color: var(--text-1);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.hero-badge-pulse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2px;
+}
+
+.hero-badge-version {
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--blue-dim);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.hero-badge-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-2);
+}
+
+.hero-badge-text {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.hero-badge-arrow {
+  opacity: 0.6;
+  transition: transform var(--ease), opacity var(--ease);
+}
+
+.hero-badge-pill:hover .hero-badge-arrow {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
 .hero-title {
-  font-size: clamp(2.2rem, 5vw, 3.2rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: clamp(2.3rem, 5.5vw, 3.6rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
   line-height: 1.12;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
   color: var(--text-1);
 }
 
+.hero-title-gradient {
+  background: linear-gradient(135deg, #ffffff 15%, #93c5fd 60%, #c4b5fd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+}
+
 .hero-description {
-  font-size: 1.15rem;
+  font-size: clamp(1.05rem, 2vw, 1.2rem);
   color: var(--text-2);
-  line-height: 1.65;
-  margin-bottom: 36px;
-  max-width: 600px;
+  line-height: 1.68;
+  margin-bottom: 34px;
+  max-width: 660px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -525,6 +631,157 @@ img {
   justify-content: center;
   gap: 16px;
   flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.hero-btn-launch {
+  box-shadow: 0 4px 20px -2px rgba(59, 130, 246, 0.4);
+  transition: all var(--ease);
+}
+
+.hero-btn-launch:hover {
+  box-shadow: 0 6px 28px -2px rgba(59, 130, 246, 0.55);
+  transform: translateY(-2px);
+}
+
+.hero-btn-github {
+  background: rgba(20, 26, 38, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-2);
+  transition: all var(--ease);
+}
+
+.hero-btn-github:hover {
+  background: var(--surface-2);
+  border-color: var(--text-3);
+  transform: translateY(-2px);
+}
+
+.hero-github-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: 2px;
+}
+
+.hero-subtext {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  margin-bottom: 40px;
+}
+
+/* Sample Prompts ("Try asking SpaceScout") */
+.hero-prompts-container {
+  margin-bottom: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-prompts-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.hero-prompts-grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 820px;
+}
+
+.hero-prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(15, 20, 31, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: all var(--ease);
+  cursor: pointer;
+}
+
+.hero-prompt-chip:hover {
+  background: var(--surface-2);
+  border-color: var(--blue);
+  color: var(--text-1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px -2px rgba(59, 130, 246, 0.2);
+}
+
+.hero-prompt-text {
+  font-weight: 500;
+}
+
+.hero-prompt-arrow {
+  opacity: 0.4;
+  transition: transform var(--ease), opacity var(--ease);
+}
+
+.hero-prompt-chip:hover .hero-prompt-arrow {
+  opacity: 1;
+  transform: translateX(3px);
+  color: var(--blue);
+}
+
+/* Metrics Strip */
+.hero-metrics-strip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 16px 28px;
+  background: rgba(15, 20, 31, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.hero-metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.hero-metric-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+
+.hero-metric-lbl {
+  font-size: 0.74rem;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+.hero-metric-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
 }
 
 /* ==============================================================================
@@ -532,7 +789,7 @@ img {
    ============================================================================== */
 
 .product-section {
-  padding-top: 80px;
+  padding-top: 48px;
   padding-bottom: 80px;
 }
 
@@ -725,40 +982,52 @@ img {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 32px;
-  align-items: start;
+  align-items: stretch;
 }
 
-.byok-content {
+.byok-features-list {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .byok-feature {
   display: flex;
   gap: 16px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+
+.byok-feature:hover {
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .byok-feature-icon {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .byok-feature-title {
   font-size: 0.95rem;
   font-weight: 600;
   margin-bottom: 4px;
+  color: var(--text-1);
 }
 
 .byok-feature-text {
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   color: var(--text-2);
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 /* BYOK visual mock */
@@ -767,6 +1036,10 @@ img {
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   overflow: hidden;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .byok-visual-header {
@@ -774,10 +1047,11 @@ img {
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--text-2);
+  color: var(--text-1);
+  background: rgba(12, 16, 24, 0.4);
 }
 
 .byok-visual-body {
@@ -785,6 +1059,8 @@ img {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  justify-content: space-between;
 }
 
 .byok-credential-row {
@@ -795,17 +1071,103 @@ img {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  transition: border-color var(--ease);
+}
+
+.byok-credential-row:hover {
+  border-color: var(--border-2);
 }
 
 .byok-provider-name {
-  font-size: 0.88rem;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-1);
 }
 
 .byok-key-hint {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--text-3);
   font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.byok-pipeline {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.byok-pipeline-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  margin-bottom: 10px;
+}
+
+.byok-pipeline-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.byok-pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.byok-step-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--blue-dim);
+  color: var(--blue);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.byok-step-name {
+  font-weight: 600;
+  color: var(--text-1);
+  font-size: 0.78rem;
+}
+
+.byok-step-desc {
+  color: var(--text-3);
+  font-size: 0.72rem;
+}
+
+.byok-pipeline-arrow {
+  color: var(--text-3);
+  font-size: 0.9rem;
+  opacity: 0.5;
+}
+
+.byok-trust-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.byok-trust-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  color: var(--text-2);
+  font-weight: 500;
 }
 
 /* ==============================================================================
@@ -886,6 +1248,8 @@ img {
   box-shadow: var(--shadow-md);
   position: relative;
   transition: border-color var(--ease), box-shadow var(--ease);
+  width: 100%;
+  max-width: 100%;
 }
 
 .astronomy-card:hover {
@@ -897,6 +1261,8 @@ img {
   display: grid;
   grid-template-columns: minmax(320px, 1.15fr) minmax(300px, 1fr);
   align-items: stretch;
+  width: 100%;
+  min-width: 0;
 }
 
 .astronomy-media-col {
@@ -905,6 +1271,8 @@ img {
   flex-direction: column;
   position: relative;
   border-right: 1px solid var(--border);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .astronomy-media-wrap {
@@ -978,6 +1346,20 @@ img {
   gap: 12px;
   font-size: 0.8rem;
   color: var(--text-2);
+  min-width: 0;
+  width: 100%;
+}
+
+.astronomy-media-attribution {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.astronomy-media-footer .btn {
+  flex-shrink: 0;
 }
 
 .astronomy-content-col {
@@ -985,6 +1367,8 @@ img {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .pulse-dot {
@@ -1116,7 +1500,7 @@ img {
 
 @media (max-width: 900px) {
   .astronomy-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .astronomy-media-col {
@@ -1155,12 +1539,36 @@ img {
     padding-bottom: 56px;
   }
 
+  .product-section {
+    padding-top: 36px;
+    padding-bottom: 56px;
+  }
+
   .hero {
-    padding-top: 48px;
+    padding-top: 56px;
+    padding-bottom: 28px;
+  }
+
+  .hero-metrics-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 18px 20px;
+    width: 100%;
+  }
+
+  .hero-metric-divider {
+    display: none;
   }
 
   .hero-title {
-    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    font-size: clamp(2.15rem, 6.5vw, 2.85rem);
+    line-height: 1.14;
+  }
+
+  .hero-actions .btn-lg {
+    padding: 9px 18px;
+    font-size: 0.92rem;
   }
 
   .product-grid {
@@ -1188,17 +1596,57 @@ img {
     padding-right: 16px;
   }
 
+  .hero-title {
+    font-size: clamp(2.05rem, 7vw, 2.45rem);
+    line-height: 1.15;
+    margin-bottom: 18px;
+  }
+
   .hero-actions {
     flex-direction: column;
+    align-items: center;
     width: 100%;
+    gap: 10px;
   }
 
   .hero-actions .btn-lg {
     width: 100%;
+    max-width: 280px;
+    padding: 9px 16px;
+    font-size: 0.88rem;
+  }
+
+  .hero-actions .btn-lg svg {
+    width: 16px;
+    height: 16px;
   }
 
   .integrations-grid {
     grid-template-columns: 1fr;
+  }
+
+  .byok-pipeline-steps {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .byok-pipeline-arrow {
+    display: none;
+  }
+
+  .astronomy-content-col {
+    padding: 20px 16px;
+  }
+
+  .astronomy-prompt-bridge {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .astronomy-prompt-bridge .btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
